@@ -5,6 +5,83 @@ import Link from "next/link";
 import type { Message, EnforcementResult } from "@/lib/types";
 import { PROVIDERS } from "@/lib/types";
 
+/* ─── Simple markdown renderer ─── */
+function renderMarkdown(text: string) {
+  const parts: React.ReactNode[] = [];
+  const lines = text.split("\n");
+  let i = 0;
+  let key = 0;
+
+  while (i < lines.length) {
+    // Code block
+    if (lines[i].startsWith("```")) {
+      const lang = lines[i].slice(3).trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing ```
+      parts.push(
+        <div key={key++} className="my-2 rounded-lg overflow-hidden border border-border">
+          {lang && (
+            <div className="px-3 py-1 bg-surface-light text-[10px] font-mono text-muted border-b border-border">
+              {lang}
+            </div>
+          )}
+          <pre className="p-3 bg-[#0a0a14] overflow-x-auto text-xs font-mono leading-relaxed">
+            <code>{codeLines.join("\n")}</code>
+          </pre>
+        </div>,
+      );
+      continue;
+    }
+
+    // Regular line with inline formatting
+    let line = lines[i];
+    const inlineParts: React.ReactNode[] = [];
+    let remaining = line;
+    let ik = 0;
+
+    while (remaining.length > 0) {
+      // Inline code
+      const codeMatch = remaining.match(/^(.*?)`([^`]+)`(.*)$/);
+      if (codeMatch) {
+        if (codeMatch[1]) inlineParts.push(codeMatch[1]);
+        inlineParts.push(
+          <code key={`ic-${ik++}`} className="px-1.5 py-0.5 rounded bg-surface-light text-accent-light text-[13px] font-mono">
+            {codeMatch[2]}
+          </code>,
+        );
+        remaining = codeMatch[3];
+        continue;
+      }
+      // Bold
+      const boldMatch = remaining.match(/^(.*?)\*\*(.+?)\*\*(.*)$/);
+      if (boldMatch) {
+        if (boldMatch[1]) inlineParts.push(boldMatch[1]);
+        inlineParts.push(<strong key={`b-${ik++}`}>{boldMatch[2]}</strong>);
+        remaining = boldMatch[3];
+        continue;
+      }
+      // No more patterns
+      inlineParts.push(remaining);
+      break;
+    }
+
+    parts.push(
+      <span key={key++}>
+        {inlineParts}
+        {i < lines.length - 1 && "\n"}
+      </span>,
+    );
+    i++;
+  }
+
+  return parts;
+}
+
 /* ─── Enforcement badge ─── */
 function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) {
   const [expanded, setExpanded] = useState(false);
@@ -110,7 +187,9 @@ function MessageBubble({ message }: { message: Message }) {
               : "bg-surface border border-border text-foreground"
           }`}
         >
-          {message.content || (
+          {message.content ? (
+            isUser ? message.content : renderMarkdown(message.content)
+          ) : (
             <span className="inline-flex gap-1">
               <span className="w-1.5 h-1.5 bg-accent-light rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
               <span className="w-1.5 h-1.5 bg-accent-light rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -124,6 +203,24 @@ function MessageBubble({ message }: { message: Message }) {
   );
 }
 
+/* ─── Chat persistence ─── */
+function saveChatHistory(messages: Message[]) {
+  try {
+    localStorage.setItem("cpuagen-chat", JSON.stringify(messages));
+  } catch {
+    // storage full — ignore
+  }
+}
+
+function loadChatHistory(): Message[] {
+  try {
+    const saved = localStorage.getItem("cpuagen-chat");
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
 /* ─── Main chat page ─── */
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -132,9 +229,11 @@ export default function ChatPage() {
   const [provider, setProvider] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
+  const [hydrated, setHydrated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Load settings + chat history from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem("cpuagen-settings");
@@ -147,7 +246,16 @@ export default function ChatPage() {
     } catch {
       // ignore
     }
+    setMessages(loadChatHistory());
+    setHydrated(true);
   }, []);
+
+  // Persist messages on change
+  useEffect(() => {
+    if (hydrated && messages.length > 0) {
+      saveChatHistory(messages);
+    }
+  }, [messages, hydrated]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -155,6 +263,11 @@ export default function ChatPage() {
 
   const providerConfig = PROVIDERS.find((p) => p.id === provider);
   const isConfigured = Boolean(provider && apiKey && model);
+
+  const clearChat = () => {
+    setMessages([]);
+    localStorage.removeItem("cpuagen-chat");
+  };
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading || !isConfigured) return;
@@ -293,6 +406,8 @@ export default function ChatPage() {
   };
 
   // Not configured — show setup prompt
+  if (!hydrated) return null;
+
   if (!isConfigured) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
@@ -327,8 +442,17 @@ export default function ChatPage() {
             {providerConfig?.name} / {model}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-muted">
-          <span className="px-2 py-0.5 rounded bg-success/10 text-success border border-success/20">
+        <div className="flex items-center gap-2">
+          {messages.length > 0 && (
+            <button
+              onClick={clearChat}
+              disabled={loading}
+              className="px-2.5 py-1 rounded-md text-[10px] font-mono text-muted border border-border hover:border-danger/30 hover:text-danger transition-colors cursor-pointer disabled:opacity-30"
+            >
+              New Chat
+            </button>
+          )}
+          <span className="px-2 py-0.5 rounded bg-success/10 text-success border border-success/20 text-[10px] font-mono">
             8/8 CBF ACTIVE
           </span>
         </div>
