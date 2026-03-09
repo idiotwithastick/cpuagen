@@ -349,37 +349,37 @@ export default function Home() {
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <FeatureCard
-              icon={"&#9878;"}
+              icon={"\u2696\uFE0F"}
               title="Physics-Based Enforcement"
               description="Every response follows thermodynamic gradient descent. The math guarantees convergence to truth, not just statistical likelihood."
               metric={"d\u03C8/dt = -\u03B7\u2207S[\u03C8]"}
             />
             <FeatureCard
-              icon={"&#128737;"}
+              icon={"\uD83D\uDEE1\uFE0F"}
               title="8 Control Barriers"
               description="Truth, naturality, energy, temperature, coherence, error, quality, and synergy. All 8 must pass or the output is blocked."
               metric={"ALL SAFE \u2192 EMIT | ANY UNSAFE \u2192 BLOCK"}
             />
             <FeatureCard
-              icon={"&#9889;"}
+              icon={"\u26A1"}
               title="TEEP Knowledge Cache"
               description="Once a question is solved, it's solved forever. 7.3M+ pre-solved basins mean most queries return in under 1ms."
               metric={"O(1) lookup \u00B7 O(N\u2192\u221E) growth"}
             />
             <FeatureCard
-              icon={"&#127760;"}
+              icon={"\uD83C\uDF10"}
               title="Bring Any LLM"
               description="Claude, GPT-4o, Gemini, Grok, Llama. Plug in your API key. CPUAGEN enforces the same physics on all of them."
               metric={"5+ providers \u00B7 13 models"}
             />
             <FeatureCard
-              icon={"&#128202;"}
+              icon={"\uD83D\uDCCA"}
               title="Multi-Model Consensus"
               description="For critical decisions, query multiple LLMs simultaneously and converge on a physics-validated consensus answer."
               metric="Cross-model basin convergence"
             />
             <FeatureCard
-              icon={"&#128736;"}
+              icon={"\uD83D\uDEE0\uFE0F"}
               title="Workspace Mode"
               description={"Coming soon: Full IDE in the browser. Edit real files, run real code, build real software \u2014 all through the enforcement layer."}
               metric={"Phase 2 \u00B7 2026"}
