@@ -292,7 +292,16 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col items-center gap-4 mb-16">
-            <WaitlistForm />
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <a
+                href="/app/chat"
+                className="px-8 py-3 rounded-lg bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-all duration-200 hover:glow-accent"
+              >
+                Launch Console
+              </a>
+              <span className="text-muted text-xs">or</span>
+              <WaitlistForm />
+            </div>
             <p className="text-xs text-muted">
               No credit card. Bring your own API key.
             </p>
