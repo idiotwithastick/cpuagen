@@ -1,4 +1,4 @@
-export type Provider = "anthropic" | "openai" | "google";
+export type Provider = "anthropic" | "openai" | "google" | "xai";
 
 export interface ProviderConfig {
   id: Provider;
@@ -51,6 +51,14 @@ export interface EnforcementResult {
   post?: EnforcementStage;
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export const PROVIDERS: ProviderConfig[] = [
   {
     id: "anthropic",
@@ -83,5 +91,15 @@ export const PROVIDERS: ProviderConfig[] = [
     ],
     defaultModel: "gemini-2.0-flash",
     apiKeyPlaceholder: "AIza...",
+  },
+  {
+    id: "xai",
+    name: "xAI (Grok)",
+    models: [
+      { id: "grok-3", name: "Grok 3" },
+      { id: "grok-3-mini", name: "Grok 3 Mini" },
+    ],
+    defaultModel: "grok-3-mini",
+    apiKeyPlaceholder: "xai-...",
   },
 ];

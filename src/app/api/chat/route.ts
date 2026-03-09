@@ -195,6 +195,64 @@ async function streamGoogle(
   return fullContent;
 }
 
+async function streamXAI(
+  messages: { role: string; content: string }[],
+  apiKey: string,
+  model: string,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder,
+) {
+  // xAI uses OpenAI-compatible API
+  const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model, messages, stream: true }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    controller.enqueue(encoder.encode(sseEvent({ type: "error", message: `xAI API error: ${res.status} - ${err}` })));
+    return "";
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) return "";
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullContent = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6).trim();
+      if (data === "[DONE]" || !data) continue;
+
+      try {
+        const parsed = JSON.parse(data);
+        const delta = parsed.choices?.[0]?.delta?.content;
+        if (delta) {
+          fullContent += delta;
+          controller.enqueue(encoder.encode(sseEvent({ type: "delta", content: delta })));
+        }
+      } catch {
+        // skip
+      }
+    }
+  }
+  return fullContent;
+}
+
 export async function POST(req: Request) {
   let body: ChatRequest;
   try {
@@ -250,6 +308,9 @@ export async function POST(req: Request) {
             break;
           case "google":
             fullContent = await streamGoogle(messages, apiKey, model, controller, encoder);
+            break;
+          case "xai":
+            fullContent = await streamXAI(messages, apiKey, model, controller, encoder);
             break;
           default:
             controller.enqueue(encoder.encode(sseEvent({ type: "error", message: `Unknown provider: ${provider}` })));

@@ -8,6 +8,7 @@ export default function SettingsPage() {
   const [provider, setProvider] = useState<Provider | "">("");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState("");
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -20,6 +21,7 @@ export default function SettingsPage() {
         setProvider(parsed.provider || "");
         setApiKey(parsed.apiKey || "");
         setModel(parsed.model || "");
+        setSystemPrompt(parsed.systemPrompt || "");
       }
     } catch {
       // ignore
@@ -42,7 +44,7 @@ export default function SettingsPage() {
   const handleSave = () => {
     localStorage.setItem(
       "cpuagen-settings",
-      JSON.stringify({ provider, apiKey, model }),
+      JSON.stringify({ provider, apiKey, model, systemPrompt }),
     );
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -130,7 +132,7 @@ export default function SettingsPage() {
         {/* Provider */}
         <div className="mb-6">
           <label className="block text-sm font-medium mb-2">Provider</label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {PROVIDERS.map((p) => (
               <button
                 key={p.id}
@@ -179,6 +181,23 @@ export default function SettingsPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* System Prompt */}
+        <div className="mb-8">
+          <label className="block text-sm font-medium mb-2">
+            System Prompt <span className="text-muted font-normal">(optional)</span>
+          </label>
+          <textarea
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
+            placeholder="You are a helpful assistant..."
+            rows={3}
+            className="w-full px-4 py-3 rounded-xl bg-background border border-border text-foreground placeholder:text-muted/40 text-sm resize-none focus:outline-none focus:border-accent/40 transition-colors"
+          />
+          <p className="mt-1.5 text-[11px] text-muted">
+            Prepended to every conversation. Sets the AI&apos;s behavior and persona.
+          </p>
         </div>
 
         {/* Actions */}
