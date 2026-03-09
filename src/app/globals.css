@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: #050508;
+  --color-foreground: #e4e4e7;
+  --color-muted: #71717a;
+  --color-accent: #6d28d9;
+  --color-accent-light: #8b5cf6;
+  --color-accent-glow: #7c3aed;
+  --color-surface: #0c0c12;
+  --color-surface-light: #13131d;
+  --color-border: #1e1e2e;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}
+
+/* Glow effects */
+.glow-accent {
+  box-shadow: 0 0 40px rgba(124, 58, 237, 0.15),
+    0 0 80px rgba(124, 58, 237, 0.05);
+}
+
+.glow-text {
+  text-shadow: 0 0 30px rgba(124, 58, 237, 0.5);
+}
+
+/* Animated gradient border */
+@keyframes gradient-rotate {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.gradient-border {
+  background: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.3),
+    rgba(59, 130, 246, 0.3),
+    rgba(124, 58, 237, 0.3)
+  );
+  background-size: 200% 200%;
+  animation: gradient-rotate 4s ease infinite;
+}
+
+/* Grid background */
+.grid-bg {
+  background-image: linear-gradient(
+      rgba(124, 58, 237, 0.03) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Radial fade */
+.radial-fade {
+  background: radial-gradient(
+    ellipse 80% 50% at 50% 0%,
+    rgba(124, 58, 237, 0.08),
+    transparent
+  );
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+/* Pulse animation for live indicators */
+@keyframes pulse-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.animate-pulse-live {
+  animation: pulse-live 2s ease-in-out infinite;
+}
