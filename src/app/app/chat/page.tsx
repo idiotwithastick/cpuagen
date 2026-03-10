@@ -2,8 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import type { Message, EnforcementResult, Conversation } from "@/lib/types";
 import { PROVIDERS } from "@/lib/types";
+
+const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 
 /* ─── Copy button ─── */
 function CopyButton({ text }: { text: string }) {
@@ -38,7 +41,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /* ─── Simple markdown renderer ─── */
-function renderMarkdown(text: string) {
+function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string) => void) {
   const parts: React.ReactNode[] = [];
   const lines = text.split("\n");
   let i = 0;
@@ -60,7 +63,17 @@ function renderMarkdown(text: string) {
         <div key={key++} className="my-2 rounded-lg overflow-hidden border border-border">
           <div className="flex items-center justify-between px-3 py-1 bg-surface-light border-b border-border">
             <span className="text-[10px] font-mono text-muted">{lang || "code"}</span>
-            <CopyButton text={codeText} />
+            <div className="flex items-center gap-1">
+              {onOpenCanvas && codeText.split("\n").length >= 3 && (
+                <button
+                  onClick={() => onOpenCanvas(codeText, lang)}
+                  className="px-2 py-0.5 rounded text-[10px] font-mono text-accent-light hover:text-foreground hover:bg-accent/10 transition-colors cursor-pointer"
+                >
+                  Open in Canvas
+                </button>
+              )}
+              <CopyButton text={codeText} />
+            </div>
           </div>
           <pre className="p-3 bg-[#0a0a14] overflow-x-auto text-xs font-mono leading-relaxed">
             <code>{codeText}</code>
@@ -229,7 +242,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
 }
 
 /* ─── Message bubble ─── */
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message, onOpenCanvas }: { message: Message; onOpenCanvas?: (code: string, lang: string) => void }) {
   const isUser = message.role === "user";
 
   return (
@@ -248,7 +261,7 @@ function MessageBubble({ message }: { message: Message }) {
           }`}
         >
           {message.content ? (
-            isUser ? message.content : renderMarkdown(message.content)
+            isUser ? message.content : renderMarkdown(message.content, onOpenCanvas)
           ) : (
             <span className="inline-flex gap-1">
               <span className="w-1.5 h-1.5 bg-accent-light rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -327,6 +340,9 @@ export default function ChatPage() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [canvasOpen, setCanvasOpen] = useState(false);
+  const [canvasCode, setCanvasCode] = useState("");
+  const [canvasLang, setCanvasLang] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -387,8 +403,22 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Auto-update canvas when LLM responds with code
+  useEffect(() => {
+    if (!canvasOpen || loading) return;
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && m.content);
+    if (!lastAssistant) return;
+    const codeMatch = lastAssistant.content.match(/```(\w*)\n([\s\S]*?)```/);
+    if (codeMatch) {
+      const [, lang, code] = codeMatch;
+      setCanvasCode(code);
+      if (lang) setCanvasLang(lang);
+    }
+  }, [messages, canvasOpen, loading]);
+
   const providerConfig = PROVIDERS.find((p) => p.id === provider);
-  const isConfigured = Boolean(provider && apiKey && model);
+  const isDemo = providerConfig?.noKeyRequired;
+  const isConfigured = Boolean(provider && model && (isDemo || apiKey));
 
   const startNewChat = () => {
     const id = crypto.randomUUID();
@@ -415,6 +445,20 @@ export default function ChatPage() {
       setMessages([]);
     }
   };
+
+  const openCanvas = useCallback((code: string, lang: string) => {
+    setCanvasCode(code);
+    setCanvasLang(lang);
+    setCanvasOpen(true);
+  }, []);
+
+  // sendMessageRef lets handleCanvasInstruction call sendMessage without circular deps
+  const sendMessageRef = useRef<(text: string) => void>(() => {});
+
+  const handleCanvasInstruction = useCallback((instruction: string, code: string) => {
+    const prompt = `Here is the current code:\n\n\`\`\`${canvasLang}\n${code}\n\`\`\`\n\n${instruction}`;
+    sendMessageRef.current(prompt);
+  }, [canvasLang]);
 
   const sendMessage = useCallback(async (overrideInput?: string) => {
     const text = overrideInput ?? input;
@@ -550,6 +594,8 @@ export default function ChatPage() {
     }
   }, [input, loading, isConfigured, messages, provider, apiKey, model, systemPrompt, activeConvId]);
 
+  sendMessageRef.current = sendMessage;
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -591,7 +637,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 relative">
+    <div className={`flex-1 flex min-h-0 ${canvasOpen ? "" : "flex-col"}`}>
+    {/* Chat pane */}
+    <div className={`flex flex-col min-h-0 relative ${canvasOpen ? "w-1/2 border-r border-border" : "flex-1"}`}>
       {/* Chat header */}
       <div className="h-12 flex items-center justify-between px-4 border-b border-border bg-surface/30 shrink-0">
         <div className="flex items-center gap-3">
@@ -705,7 +753,7 @@ export default function ChatPage() {
           </div>
         )}
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} onOpenCanvas={openCanvas} />
         ))}
         <div ref={messagesEndRef} />
       </div>
@@ -742,6 +790,19 @@ export default function ChatPage() {
           <span>Enforcement: ON {"\u00B7"} 8/8 CBF {"\u00B7"} TEEP cache active</span>
         </div>
       </div>
+    </div>{/* end chat pane */}
+
+    {/* Canvas pane */}
+    {canvasOpen && (
+      <div className="w-1/2 min-h-0">
+        <Canvas
+          code={canvasCode}
+          language={canvasLang}
+          onClose={() => setCanvasOpen(false)}
+          onSendToChat={handleCanvasInstruction}
+        />
+      </div>
+    )}
     </div>
   );
 }

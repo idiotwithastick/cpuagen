@@ -1,4 +1,4 @@
-export type Provider = "anthropic" | "openai" | "google" | "xai";
+export type Provider = "anthropic" | "openai" | "google" | "xai" | "demo";
 
 export interface ProviderConfig {
   id: Provider;
@@ -6,6 +6,7 @@ export interface ProviderConfig {
   models: { id: string; name: string }[];
   defaultModel: string;
   apiKeyPlaceholder: string;
+  noKeyRequired?: boolean;
 }
 
 export interface Message {
@@ -60,6 +61,17 @@ export interface Conversation {
 }
 
 export const PROVIDERS: ProviderConfig[] = [
+  {
+    id: "demo",
+    name: "Free (Demo)",
+    models: [
+      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
+      { id: "gpt-4o-mini", name: "GPT-4o Mini" },
+    ],
+    defaultModel: "gemini-2.0-flash",
+    apiKeyPlaceholder: "",
+    noKeyRequired: true,
+  },
   {
     id: "anthropic",
     name: "Anthropic (Claude)",

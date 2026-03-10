@@ -29,13 +29,19 @@ export default function SettingsPage() {
   }, []);
 
   const providerConfig = PROVIDERS.find((p) => p.id === provider);
+  const isDemo = providerConfig?.noKeyRequired;
+  const canSave = provider && model && (isDemo || apiKey);
+  const canTest = canSave && !testing;
 
   const handleProviderChange = (newProvider: Provider | "") => {
     setProvider(newProvider);
     setTestResult(null);
     if (newProvider) {
       const config = PROVIDERS.find((p) => p.id === newProvider);
-      if (config) setModel(config.defaultModel);
+      if (config) {
+        setModel(config.defaultModel);
+        if (config.noKeyRequired) setApiKey("");
+      }
     } else {
       setModel("");
     }
@@ -51,7 +57,7 @@ export default function SettingsPage() {
   };
 
   const handleTest = async () => {
-    if (!provider || !apiKey || !model) return;
+    if (!canTest) return;
     setTesting(true);
     setTestResult(null);
 
@@ -132,7 +138,7 @@ export default function SettingsPage() {
         {/* Provider */}
         <div className="mb-6">
           <label className="block text-sm font-medium mb-2">Provider</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {PROVIDERS.map((p) => (
               <button
                 key={p.id}
@@ -141,29 +147,47 @@ export default function SettingsPage() {
                   provider === p.id
                     ? "border-accent/40 bg-accent/10 text-accent-light"
                     : "border-border bg-surface hover:border-accent/20 text-muted hover:text-foreground"
-                }`}
+                } ${p.noKeyRequired ? "ring-1 ring-success/20" : ""}`}
               >
                 {p.name}
+                {p.noKeyRequired && (
+                  <span className="block text-[10px] text-success mt-0.5">No API key needed</span>
+                )}
               </button>
             ))}
           </div>
         </div>
 
-        {/* API Key */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">API Key</label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => { setApiKey(e.target.value); setTestResult(null); }}
-            placeholder={providerConfig?.apiKeyPlaceholder || "Select a provider first"}
-            disabled={!provider}
-            className="w-full px-4 py-3 rounded-xl bg-background border border-border text-foreground placeholder:text-muted/40 font-mono text-sm focus:outline-none focus:border-accent/40 transition-colors disabled:opacity-40"
-          />
-          <p className="mt-1.5 text-[11px] text-muted">
-            Stored in your browser only. Never sent to CPUAGEN servers.
-          </p>
-        </div>
+        {/* API Key — hidden for demo */}
+        {!isDemo && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">API Key</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => { setApiKey(e.target.value); setTestResult(null); }}
+              placeholder={providerConfig?.apiKeyPlaceholder || "Select a provider first"}
+              disabled={!provider}
+              className="w-full px-4 py-3 rounded-xl bg-background border border-border text-foreground placeholder:text-muted/40 font-mono text-sm focus:outline-none focus:border-accent/40 transition-colors disabled:opacity-40"
+            />
+            <p className="mt-1.5 text-[11px] text-muted">
+              Stored in your browser only. Never sent to CPUAGEN servers.
+            </p>
+          </div>
+        )}
+
+        {isDemo && (
+          <div className="mb-6 p-4 rounded-xl bg-success/5 border border-success/20">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2 h-2 bg-success rounded-full" />
+              <span className="text-sm font-medium text-success">Free Demo Mode</span>
+            </div>
+            <p className="text-xs text-muted">
+              No API key needed. Uses CPUAGEN&apos;s hosted models for testing.
+              For production use, switch to your own API key.
+            </p>
+          </div>
+        )}
 
         {/* Model */}
         <div className="mb-8">
@@ -204,14 +228,14 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3 mb-6">
           <button
             onClick={handleSave}
-            disabled={!provider || !apiKey || !model}
+            disabled={!canSave}
             className="px-6 py-3 rounded-xl bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           >
             {saved ? "\u2713 Saved" : "Save Settings"}
           </button>
           <button
             onClick={handleTest}
-            disabled={!provider || !apiKey || !model || testing}
+            disabled={!canTest}
             className="px-6 py-3 rounded-xl bg-surface border border-border hover:border-accent/30 text-foreground font-medium text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           >
             {testing ? (

@@ -261,10 +261,36 @@ export async function POST(req: Request) {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const { messages, provider, apiKey, model } = body;
+  const { messages, provider: rawProvider, apiKey: clientKey, model: rawModel } = body;
 
-  if (!messages?.length || !provider || !apiKey || !model) {
+  if (!messages?.length || !rawProvider || !rawModel) {
     return new Response("Missing required fields", { status: 400 });
+  }
+
+  // Demo mode: resolve to real provider + server-side API key
+  let provider = rawProvider;
+  let apiKey = clientKey || "";
+  let model = rawModel;
+
+  if (rawProvider === "demo") {
+    // Map demo models to real providers
+    const demoMap: Record<string, { provider: string; envKey: string }> = {
+      "gemini-2.0-flash": { provider: "google", envKey: "DEMO_GOOGLE_KEY" },
+      "gpt-4o-mini": { provider: "openai", envKey: "DEMO_OPENAI_KEY" },
+    };
+    const mapping = demoMap[rawModel];
+    if (!mapping) {
+      return new Response("Unknown demo model", { status: 400 });
+    }
+    const serverKey = process.env[mapping.envKey];
+    if (!serverKey) {
+      return new Response("Demo mode not configured. Please use your own API key.", { status: 503 });
+    }
+    provider = mapping.provider;
+    apiKey = serverKey;
+    model = rawModel;
+  } else if (!clientKey) {
+    return new Response("Missing API key", { status: 400 });
   }
 
   const lastUserMsg = messages.filter((m) => m.role === "user").pop();
