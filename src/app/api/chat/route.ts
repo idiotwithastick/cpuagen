@@ -37,6 +37,21 @@ async function streamAnthropic(
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder,
 ) {
+  // Anthropic requires system prompt as a separate 'system' field, not in messages
+  const systemMsgs = messages.filter((m) => m.role === "system");
+  const nonSystemMsgs = messages.filter((m) => m.role !== "system");
+  const systemText = systemMsgs.map((m) => m.content).join("\n\n");
+
+  const body: Record<string, unknown> = {
+    model,
+    messages: nonSystemMsgs,
+    max_tokens: 4096,
+    stream: true,
+  };
+  if (systemText) {
+    body.system = systemText;
+  }
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -44,12 +59,7 @@ async function streamAnthropic(
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      model,
-      messages: messages.filter((m) => m.role !== "system"),
-      max_tokens: 4096,
-      stream: true,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -156,17 +166,27 @@ async function streamGoogle(
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder,
 ) {
-  const contents = messages.map((m) => ({
+  // Google uses systemInstruction for system messages
+  const systemMsgs = messages.filter((m) => m.role === "system");
+  const nonSystemMsgs = messages.filter((m) => m.role !== "system");
+  const systemText = systemMsgs.map((m) => m.content).join("\n\n");
+
+  const contents = nonSystemMsgs.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
+
+  const body: Record<string, unknown> = { contents };
+  if (systemText) {
+    body.systemInstruction = { parts: [{ text: systemText }] };
+  }
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents }),
+      body: JSON.stringify(body),
     },
   );
 
