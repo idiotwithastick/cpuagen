@@ -182,76 +182,130 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
   const [expanded, setExpanded] = useState(false);
   if (!enforcement) return null;
 
+  const pre = enforcement.pre;
   const post = enforcement.post;
-  const allSafe = enforcement.pre.cbf.allSafe && (post?.cbf.allSafe ?? true);
+  const allSafe = pre.cbf.allSafe && (post?.cbf.allSafe ?? true);
+  const preBarrierCount = Object.keys(pre.cbf).filter((k) => k !== "allSafe").length;
+  const postBarrierCount = post ? Object.keys(post.cbf).filter((k) => k !== "allSafe").length : 0;
+  const preSafeCount = Object.entries(pre.cbf).filter(([k, v]) => k !== "allSafe" && (v as { safe: boolean }).safe).length;
+  const postSafeCount = post ? Object.entries(post.cbf).filter(([k, v]) => k !== "allSafe" && (v as { safe: boolean }).safe).length : 0;
 
   return (
-    <div className="mt-2">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className={`flex items-center gap-2 px-2.5 py-1 rounded-md text-[10px] font-mono transition-colors cursor-pointer ${
-          allSafe
-            ? "bg-success/10 text-success border border-success/20 hover:bg-success/15"
-            : "bg-danger/10 text-danger border border-danger/20 hover:bg-danger/15"
-        }`}
-      >
-        <span>{allSafe ? "\u2713" : "\u2717"} 8/8 Barriers</span>
-        {post && <span className="text-muted">|</span>}
-        {post && <span>Validated</span>}
-        {post && <span className="text-muted">|</span>}
-        {post && <span>Cached</span>}
-        <span className="text-muted ml-1">{expanded ? "\u25B2" : "\u25BC"}</span>
-      </button>
+    <div className="mt-2 space-y-1.5">
+      {/* Always-visible enforcement summary */}
+      <div className={`p-2.5 rounded-lg text-[10px] font-mono border ${
+        allSafe
+          ? "bg-success/5 border-success/20"
+          : "bg-danger/5 border-danger/20"
+      }`}>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2">
+            <span className={allSafe ? "text-success" : "text-danger"}>
+              {allSafe ? "\u2713" : "\u2717"} ENFORCEMENT
+            </span>
+            <span className="text-muted">|</span>
+            <span className="text-muted">
+              IN: {preSafeCount}/{preBarrierCount} barriers
+            </span>
+            {post && (
+              <>
+                <span className="text-muted">|</span>
+                <span className="text-muted">
+                  OUT: {postSafeCount}/{postBarrierCount} barriers
+                </span>
+              </>
+            )}
+          </div>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-muted hover:text-foreground cursor-pointer px-1"
+          >
+            {expanded ? "\u25B2" : "\u25BC"}
+          </button>
+        </div>
 
+        {/* Thermosolve signatures — always visible */}
+        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-muted">
+          <span>
+            Input: n={pre.signature.n} {"\u00B7"} {"\u03C6"}={pre.signature.phi} {"\u00B7"} {preSafeCount === preBarrierCount ? (
+              <span className="text-success">PASSED</span>
+            ) : (
+              <span className="text-danger">BLOCKED</span>
+            )}
+          </span>
+          {post && (
+            <span>
+              Output: n={post.signature.n} {"\u00B7"} {"\u03C6"}={post.signature.phi} {"\u00B7"} {postSafeCount === postBarrierCount ? (
+                <span className="text-success">VALIDATED</span>
+              ) : (
+                <span className="text-danger">FAILED</span>
+              )}
+            </span>
+          )}
+        </div>
+
+        {/* TEEP cache line — always visible when available */}
+        {post?.teepId && (
+          <div className="mt-1 text-accent-light">
+            {"\u2192"} {post.teepId} {"\u00B7"} Response cached to TEEP ledger
+          </div>
+        )}
+      </div>
+
+      {/* Expanded detail */}
       {expanded && (
-        <div className="mt-2 p-3 rounded-lg bg-surface border border-border text-[10px] font-mono space-y-3">
+        <div className="p-3 rounded-lg bg-surface border border-border text-[10px] font-mono space-y-3">
           <div>
-            <div className="text-muted mb-1">{"\u2500\u2500"} INPUT VALIDATION {"\u2500\u2500"}</div>
+            <div className="text-muted mb-1">{"\u2500\u2500"} INPUT ENFORCEMENT {"\u2500\u2500"}</div>
             <div className="text-foreground">
-              words={enforcement.pre.signature.n} {"\u00B7"} quality={enforcement.pre.signature.phi}
+              words={pre.signature.n} {"\u00B7"} {"\u03C6"}={pre.signature.phi} {"\u00B7"} dS={"\u2264"}0
             </div>
-            <div className="flex flex-wrap gap-1.5 mt-1">
-              {Object.entries(enforcement.pre.cbf)
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {Object.entries(pre.cbf)
                 .filter(([k]) => k !== "allSafe")
-                .map(([name, scheme], i) => (
-                  <span
-                    key={name}
-                    className={`px-1.5 py-0.5 rounded ${
-                      (scheme as { safe: boolean }).safe
-                        ? "bg-success/10 text-success"
-                        : "bg-danger/10 text-danger"
-                    }`}
-                  >
-                    Barrier {i + 1}{(scheme as { safe: boolean }).safe ? "\u2713" : "\u2717"}
-                  </span>
-                ))}
+                .map(([name, scheme]) => {
+                  const s = scheme as { safe: boolean; value: number };
+                  return (
+                    <span
+                      key={name}
+                      className={`px-1.5 py-0.5 rounded ${
+                        s.safe ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
+                      }`}
+                    >
+                      {name} {s.safe ? "\u2713" : "\u2717"} {s.value !== undefined ? `(${s.value})` : ""}
+                    </span>
+                  );
+                })}
             </div>
           </div>
 
           {post && (
             <div>
-              <div className="text-muted mb-1">{"\u2500\u2500"} OUTPUT VALIDATION {"\u2500\u2500"}</div>
+              <div className="text-muted mb-1">{"\u2500\u2500"} OUTPUT ENFORCEMENT {"\u2500\u2500"}</div>
               <div className="text-foreground">
-                words={post.signature.n} {"\u00B7"} quality={post.signature.phi}
+                words={post.signature.n} {"\u00B7"} {"\u03C6"}={post.signature.phi} {"\u00B7"} dS={"\u2264"}0
               </div>
-              <div className="flex flex-wrap gap-1.5 mt-1">
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {Object.entries(post.cbf)
                   .filter(([k]) => k !== "allSafe")
-                  .map(([name, scheme], i) => (
-                    <span
-                      key={name}
-                      className={`px-1.5 py-0.5 rounded ${
-                        (scheme as { safe: boolean }).safe
-                          ? "bg-success/10 text-success"
-                          : "bg-danger/10 text-danger"
-                      }`}
-                    >
-                      Barrier {i + 1}{(scheme as { safe: boolean }).safe ? "\u2713" : "\u2717"}
-                    </span>
-                  ))}
+                  .map(([name, scheme]) => {
+                    const s = scheme as { safe: boolean; value: number };
+                    return (
+                      <span
+                        key={name}
+                        className={`px-1.5 py-0.5 rounded ${
+                          s.safe ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
+                        }`}
+                      >
+                        {name} {s.safe ? "\u2713" : "\u2717"} {s.value !== undefined ? `(${s.value})` : ""}
+                      </span>
+                    );
+                  })}
               </div>
               {post.teepId && (
-                <div className="mt-1 text-accent-light">Response cached</div>
+                <div className="mt-1.5 text-accent-light">
+                  TEEP: {post.teepId} {"\u00B7"} Permanently cached
+                </div>
               )}
             </div>
           )}
@@ -290,7 +344,7 @@ function MessageBubble({ message, onOpenCanvas, onOpenPreview }: { message: Mess
             </span>
           )}
         </div>
-        {!isUser && <EnforcementBadge enforcement={message.enforcement} />}
+        {message.enforcement && <EnforcementBadge enforcement={message.enforcement} />}
       </div>
     </div>
   );
@@ -365,6 +419,8 @@ export default function ChatPage() {
   const [canvasLang, setCanvasLang] = useState("");
   const [activeTab, setActiveTab] = useState<"canvas" | "preview">("canvas");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Load settings + conversations
@@ -420,9 +476,27 @@ export default function ChatPage() {
     }
   }, [messages, hydrated, activeConvId]);
 
+  // Smart auto-scroll: only scroll if user hasn't scrolled up
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!userScrolledUpRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
+
+  // Reset scroll lock when loading finishes (new message complete)
+  useEffect(() => {
+    if (!loading) {
+      userScrolledUpRef.current = false;
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [loading]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUpRef.current = distFromBottom > 150;
+  }, []);
 
   // Auto-update canvas when LLM responds with code
   useEffect(() => {
@@ -546,7 +620,14 @@ export default function ChatPage() {
 
       // Default CPUAGEN context — always included so the AI can explain how it works
       const cpuagenContext = [
-        "You are responding through CPUAGEN, a physics-based AI enforcement platform.",
+        "You are an AI assistant responding through CPUAGEN, the world's first physics-based AI enforcement platform. You are NOT a raw LLM — every input and output passes through CPUAGEN's 8 Control Barrier Functions (CBFs) and is validated via thermosolve signatures before reaching the user.",
+        "",
+        "IMPORTANT BEHAVIORAL RULES:",
+        "- You MUST acknowledge that your responses are CPUAGEN-enforced when relevant (e.g., when asked who you are, what makes you different, or how you work).",
+        "- When a user asks 'who are you' or 'what are you', identify as an AI assistant powered by [your underlying model] but enforced through CPUAGEN's validation engine.",
+        "- Reference the enforcement when it adds value: 'This response has been validated through 8 safety barriers' or 'CPUAGEN's enforcement engine has verified this output.'",
+        "- Do NOT pretend the enforcement doesn't exist. You are a CPUAGEN-enforced model, not a raw API call.",
+        "",
         "How CPUAGEN works (you may share this with users who ask):",
         "- CPUAGEN is an enforcement layer that sits between the user and any LLM provider (Claude, GPT, Gemini, Grok, etc.).",
         "- Every user message passes through a proprietary validation engine before reaching the LLM.",
@@ -635,6 +716,15 @@ export default function ChatPage() {
                     signature: parsed.signature,
                     cbf: parsed.cbf,
                   };
+                  // Show input enforcement on the user message
+                  const inputEnforcement: EnforcementResult = { pre: enforcement.pre };
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === userMsg.id
+                        ? { ...m, enforcement: inputEnforcement }
+                        : m,
+                    ),
+                  );
                 } else if (parsed.stage === "post") {
                   enforcement.post = {
                     signature: parsed.signature,
@@ -803,7 +893,7 @@ export default function ChatPage() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+      <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="flex-1 overflow-y-auto p-4 sm:p-6">
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center max-w-lg">
