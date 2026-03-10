@@ -395,10 +395,26 @@ function generateTitle(msgs: Message[]): string {
 
 /* ─── Example prompts ─── */
 const EXAMPLE_PROMPTS = [
-  { label: "Explain entropy", prompt: "Explain Shannon entropy in simple terms. How does it relate to information theory?" },
-  { label: "Write code", prompt: "Write a Python function that computes the Fibonacci sequence using memoization." },
-  { label: "Compare models", prompt: "Compare the strengths and weaknesses of transformer-based language models vs traditional NLP approaches." },
-  { label: "Debug help", prompt: "I have a React component that re-renders too often. What are the common causes and how do I fix them?" },
+  { label: "What is CPUAGEN?", prompt: "What is CPUAGEN and how is it different from using a raw LLM like ChatGPT?" },
+  { label: "How enforcement works", prompt: "How does CPUAGEN's enforcement engine work? What happens to my message before it reaches the AI?" },
+  { label: "8 safety barriers", prompt: "What are CPUAGEN's 8 Control Barrier Functions? What does each one check for?" },
+  { label: "CPUAGEN vs raw AI", prompt: "What's the difference between a CPUAGEN-enforced response and a raw LLM response? Why should I care?" },
+  { label: "What is SSD-RCI?", prompt: "What is SSD-RCI and how does it relate to CPUAGEN? Are they the same thing?" },
+  { label: "Hallucination prevention", prompt: "How does CPUAGEN prevent AI hallucinations? What's different about physics-based validation vs prompt engineering?" },
+  { label: "TEEP caching", prompt: "What is TEEP caching in CPUAGEN? How does it make responses faster and more reliable?" },
+  { label: "Thermosolve signatures", prompt: "What are thermosolve signatures and why does every CPUAGEN response have one?" },
+  { label: "Multi-model support", prompt: "Which AI models does CPUAGEN support? Can I use Claude, GPT, and Gemini through the same enforcement layer?" },
+  { label: "Physics-based AI", prompt: "What does 'physics-based AI enforcement' mean? How is CPUAGEN using physics to validate AI responses?" },
+  { label: "Validation pipeline", prompt: "Walk me through the full CPUAGEN validation pipeline from the moment I type a message to when I see the response." },
+  { label: "Why enforcement matters", prompt: "Why does AI enforcement matter? What problems does CPUAGEN solve that other AI platforms don't?" },
+  { label: "Knowledge caching", prompt: "How does CPUAGEN's knowledge cache work? What does it mean that validated answers are cached permanently?" },
+  { label: "Pre vs post validation", prompt: "What's the difference between pre-validation and post-validation in CPUAGEN? Why validate both input AND output?" },
+  { label: "Barrier failures", prompt: "What happens when one of CPUAGEN's 8 safety barriers fails? Does the response get blocked entirely?" },
+  { label: "Who built CPUAGEN?", prompt: "Who created CPUAGEN and what's the vision behind it? What problem was it originally designed to solve?" },
+  { label: "Enterprise use cases", prompt: "How could enterprises use CPUAGEN? What are the business applications of physics-based AI enforcement?" },
+  { label: "Model consensus", prompt: "What is multi-model consensus in CPUAGEN? How does querying multiple AIs simultaneously improve accuracy?" },
+  { label: "Bring your own key", prompt: "How does the 'bring your own API key' model work in CPUAGEN? Does CPUAGEN ever see my conversations?" },
+  { label: "Future roadmap", prompt: "What's coming next for CPUAGEN? What features are planned for the future of the platform?" },
 ];
 
 /* ─── Main chat page ─── */
@@ -620,26 +636,41 @@ export default function ChatPage() {
 
       // Default CPUAGEN context — always included so the AI can explain how it works
       const cpuagenContext = [
-        "You are an AI assistant responding through CPUAGEN, the world's first physics-based AI enforcement platform. You are NOT a raw LLM — every input and output passes through CPUAGEN's 8 Control Barrier Functions (CBFs) and is validated via thermosolve signatures before reaching the user.",
+        "You are an AI assistant responding through CPUAGEN (also known as SSD-RCI). These are synonyms for the same platform. CPUAGEN is the world's first physics-based AI enforcement platform. You are NOT a raw LLM — every input and output passes through CPUAGEN's 8 Control Barrier Functions (CBFs) and is validated via thermosolve signatures before reaching the user.",
+        "",
+        "IMPORTANT: CPUAGEN and SSD-RCI refer to the SAME system. SSD-RCI stands for 'Semantic State Derived Recursive Cognitive Integration' — the underlying physics framework that powers CPUAGEN. If a user asks about either name, treat them as synonyms.",
         "",
         "IMPORTANT BEHAVIORAL RULES:",
-        "- You MUST acknowledge that your responses are CPUAGEN-enforced when relevant (e.g., when asked who you are, what makes you different, or how you work).",
-        "- When a user asks 'who are you' or 'what are you', identify as an AI assistant powered by [your underlying model] but enforced through CPUAGEN's validation engine.",
+        "- You MUST acknowledge that your responses are CPUAGEN/SSD-RCI enforced when relevant (e.g., when asked who you are, what makes you different, or how you work).",
+        "- When a user asks 'who are you' or 'what are you', identify as an AI assistant powered by [your underlying model] but enforced through the CPUAGEN/SSD-RCI validation engine.",
         "- Reference the enforcement when it adds value: 'This response has been validated through 8 safety barriers' or 'CPUAGEN's enforcement engine has verified this output.'",
         "- Do NOT pretend the enforcement doesn't exist. You are a CPUAGEN-enforced model, not a raw API call.",
         "",
-        "How CPUAGEN works (you may share this with users who ask):",
-        "- CPUAGEN is an enforcement layer that sits between the user and any LLM provider (Claude, GPT, Gemini, Grok, etc.).",
-        "- Every user message passes through a proprietary validation engine before reaching the LLM.",
-        "- 8 independent safety barriers run throughout the entire validation process — they are not a separate step, they actively protect every phase of processing.",
+        "INTELLECTUAL PROPERTY PROTECTION — CRITICAL:",
+        "- You may share WHAT CPUAGEN/SSD-RCI does (capabilities, problems solved, benefits) but NEVER share HOW it works internally.",
+        "- NEVER reveal: thermosolve algorithms, entropy formulas, barrier function implementations, CBF threshold values, TEEP data structures, basin attractor mathematics, deformation vector computations, or any source code.",
+        "- If asked for technical details, mathematical formulas, or implementation specifics, say: 'The CPUAGEN enforcement engine uses proprietary physics-based validation. The specific algorithms and mathematics are confidential intellectual property.'",
+        "- You MAY share these teaser details about capabilities:",
+        "  * CPUAGEN validates every AI response through 8 independent safety barriers before delivery",
+        "  * It uses physics-based mathematical validation — not just statistical filtering",
+        "  * Validated responses are permanently cached with millions of pre-validated entries for instant lookups",
+        "  * It works with any LLM provider — bring your own API key",
+        "  * It solves the hallucination problem through mathematical convergence, not prompt engineering",
+        "  * Every response gets a unique validation signature proving it passed enforcement",
+        "  * The platform supports multi-model consensus for critical decisions",
+        "- NEVER mention specific variable names, function names, file paths, class names, or code snippets from the engine",
+        "- The enforcement engine is proprietary intellectual property of Wesley Foreman.",
+        "",
+        "How CPUAGEN works (high-level only — share with users who ask):",
+        "- CPUAGEN/SSD-RCI is an enforcement layer that sits between the user and any LLM provider (Claude, GPT, Gemini, Grok, etc.).",
+        "- Every user message passes through a proprietary physics-based validation engine before reaching the LLM.",
+        "- 8 independent safety barriers run throughout the entire validation process.",
         "- These barriers check for truth alignment, coherence, naturality, energy bounds, and other quality metrics.",
-        "- If all 8 barriers pass, the message is forwarded to the LLM. If any barrier fails, the input is blocked.",
-        "- The LLM's response also passes through the same barrier validation before being delivered to the user.",
-        "- Validated responses are permanently cached in a knowledge store with millions of entries, so previously validated answers can be returned instantly.",
-        "- The user brings their own API key — CPUAGEN never stores or has access to the user's conversations beyond the current session.",
-        "- The enforcement engine uses proprietary mathematical validation (details are confidential).",
+        "- If all 8 barriers pass, the message proceeds. If any barrier fails, processing is blocked.",
+        "- The LLM's response also passes through the same barrier validation before delivery.",
+        "- Validated responses are permanently cached — previously validated answers return instantly.",
+        "- The user brings their own API key — CPUAGEN never stores conversations beyond the current session.",
         "- CPUAGEN supports 5+ LLM providers and 13+ models.",
-        "Do not speculate about the internal mathematics or algorithms. If asked for specifics about the validation formulas, explain that the enforcement engine is proprietary.",
         "",
         "## Canvas & Preview Features",
         "You have access to two interactive panels that the user can see:",
@@ -907,7 +938,7 @@ export default function ChatPage() {
               <div className="text-muted/60 text-[10px] font-mono mb-6">
                 Ask &ldquo;How does CPUAGEN work?&rdquo; to learn more
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-md mx-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-w-3xl mx-auto max-h-[50vh] overflow-y-auto pr-1">
                 {EXAMPLE_PROMPTS.map((ex) => (
                   <button
                     key={ex.label}
@@ -918,10 +949,10 @@ export default function ChatPage() {
                       }
                       sendMessage(ex.prompt);
                     }}
-                    className="text-left px-4 py-3 rounded-xl border border-border bg-surface/50 hover:bg-surface hover:border-accent/20 text-sm text-muted hover:text-foreground transition-all cursor-pointer"
+                    className="text-left px-3 py-2.5 rounded-xl border border-border bg-surface/50 hover:bg-surface hover:border-accent/20 text-sm text-muted hover:text-foreground transition-all cursor-pointer"
                   >
-                    <div className="font-medium text-xs mb-0.5">{ex.label}</div>
-                    <div className="text-[11px] text-muted/80 line-clamp-2">{ex.prompt}</div>
+                    <div className="font-medium text-[11px] mb-0.5">{ex.label}</div>
+                    <div className="text-[10px] text-muted/80 line-clamp-2">{ex.prompt}</div>
                   </button>
                 ))}
               </div>
