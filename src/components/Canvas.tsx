@@ -7,9 +7,10 @@ interface CanvasProps {
   language: string;
   onClose: () => void;
   onSendToChat: (instruction: string, code: string) => void;
+  onCodeChange?: (code: string) => void;
 }
 
-export default function Canvas({ code, language, onClose, onSendToChat }: CanvasProps) {
+export default function Canvas({ code, language, onClose, onSendToChat, onCodeChange }: CanvasProps) {
   const [editedCode, setEditedCode] = useState(code);
   const [instruction, setInstruction] = useState("");
   const [copied, setCopied] = useState(false);
@@ -133,7 +134,10 @@ export default function Canvas({ code, language, onClose, onSendToChat }: Canvas
         <textarea
           ref={textareaRef}
           value={editedCode}
-          onChange={(e) => setEditedCode(e.target.value)}
+          onChange={(e) => {
+            setEditedCode(e.target.value);
+            onCodeChange?.(e.target.value);
+          }}
           onScroll={handleScroll}
           onKeyDown={(e) => {
             if (e.key === "Tab") {
@@ -143,6 +147,7 @@ export default function Canvas({ code, language, onClose, onSendToChat }: Canvas
               const end = ta.selectionEnd;
               const newVal = editedCode.substring(0, start) + "  " + editedCode.substring(end);
               setEditedCode(newVal);
+              onCodeChange?.(newVal);
               requestAnimationFrame(() => {
                 ta.selectionStart = ta.selectionEnd = start + 2;
               });

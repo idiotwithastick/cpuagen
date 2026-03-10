@@ -7,6 +7,20 @@ import type { Message, EnforcementResult, Conversation } from "@/lib/types";
 import { PROVIDERS } from "@/lib/types";
 
 const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
+const Preview = dynamic(() => import("@/components/Preview"), { ssr: false });
+
+/* ─── HTML detection ─── */
+function isHtmlContent(code: string, lang: string): boolean {
+  const htmlLangs = ["html", "htm", "svg"];
+  if (htmlLangs.includes(lang.toLowerCase())) return true;
+  const trimmed = code.trim().toLowerCase();
+  return (
+    trimmed.startsWith("<!doctype") ||
+    trimmed.startsWith("<html") ||
+    trimmed.startsWith("<svg") ||
+    (trimmed.startsWith("<") && (trimmed.includes("<body") || trimmed.includes("<div") || trimmed.includes("<style")))
+  );
+}
 
 /* ─── Copy button ─── */
 function CopyButton({ text }: { text: string }) {
@@ -41,7 +55,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /* ─── Simple markdown renderer ─── */
-function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string) => void) {
+function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string) => void, onOpenPreview?: (code: string, lang: string) => void) {
   const parts: React.ReactNode[] = [];
   const lines = text.split("\n");
   let i = 0;
@@ -64,6 +78,14 @@ function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string
           <div className="flex items-center justify-between px-3 py-1 bg-surface-light border-b border-border">
             <span className="text-[10px] font-mono text-muted">{lang || "code"}</span>
             <div className="flex items-center gap-1">
+              {onOpenPreview && isHtmlContent(codeText, lang) && codeText.length > 50 && (
+                <button
+                  onClick={() => onOpenPreview(codeText, lang)}
+                  className="px-2 py-0.5 rounded text-[10px] font-mono text-success hover:text-foreground hover:bg-success/10 transition-colors cursor-pointer"
+                >
+                  Preview
+                </button>
+              )}
               {onOpenCanvas && codeText.split("\n").length >= 3 && (
                 <button
                   onClick={() => onOpenCanvas(codeText, lang)}
@@ -240,7 +262,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
 }
 
 /* ─── Message bubble ─── */
-function MessageBubble({ message, onOpenCanvas }: { message: Message; onOpenCanvas?: (code: string, lang: string) => void }) {
+function MessageBubble({ message, onOpenCanvas, onOpenPreview }: { message: Message; onOpenCanvas?: (code: string, lang: string) => void; onOpenPreview?: (code: string, lang: string) => void }) {
   const isUser = message.role === "user";
 
   return (
@@ -259,7 +281,7 @@ function MessageBubble({ message, onOpenCanvas }: { message: Message; onOpenCanv
           }`}
         >
           {message.content ? (
-            isUser ? message.content : renderMarkdown(message.content, onOpenCanvas)
+            isUser ? message.content : renderMarkdown(message.content, onOpenCanvas, onOpenPreview)
           ) : (
             <span className="inline-flex gap-1">
               <span className="w-1.5 h-1.5 bg-accent-light rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -341,6 +363,7 @@ export default function ChatPage() {
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasCode, setCanvasCode] = useState("");
   const [canvasLang, setCanvasLang] = useState("");
+  const [activeTab, setActiveTab] = useState<"canvas" | "preview">("canvas");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -406,11 +429,30 @@ export default function ChatPage() {
     if (!canvasOpen || loading) return;
     const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && m.content);
     if (!lastAssistant) return;
-    const codeMatch = lastAssistant.content.match(/```(\w*)\n([\s\S]*?)```/);
-    if (codeMatch) {
-      const [, lang, code] = codeMatch;
-      setCanvasCode(code);
-      if (lang) setCanvasLang(lang);
+
+    // Find all code blocks, prefer HTML ones
+    const allMatches = [...lastAssistant.content.matchAll(/```(\w*)\n([\s\S]*?)```/g)];
+    if (allMatches.length === 0) return;
+
+    const htmlMatch = allMatches.find(([, lang]) => isHtmlContent("", lang || ""));
+    const best = htmlMatch || allMatches[0];
+    const [, lang, code] = best;
+    setCanvasCode(code);
+    if (lang) setCanvasLang(lang);
+    if (htmlMatch) setActiveTab("preview");
+  }, [messages, canvasOpen, loading]);
+
+  // Auto-open Canvas+Preview for HTML responses when canvas is not open
+  useEffect(() => {
+    if (canvasOpen || loading) return;
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && m.content);
+    if (!lastAssistant) return;
+    const htmlMatch = lastAssistant.content.match(/```(html|htm|svg)\n([\s\S]*?)```/);
+    if (htmlMatch && htmlMatch[2].length > 50) {
+      setCanvasCode(htmlMatch[2]);
+      setCanvasLang(htmlMatch[1]);
+      setCanvasOpen(true);
+      setActiveTab("preview");
     }
   }, [messages, canvasOpen, loading]);
 
@@ -448,13 +490,21 @@ export default function ChatPage() {
     setCanvasCode(code);
     setCanvasLang(lang);
     setCanvasOpen(true);
+    setActiveTab(isHtmlContent(code, lang) ? "preview" : "canvas");
+  }, []);
+
+  const openPreview = useCallback((code: string, lang: string) => {
+    setCanvasCode(code);
+    setCanvasLang(lang);
+    setCanvasOpen(true);
+    setActiveTab("preview");
   }, []);
 
   // sendMessageRef lets handleCanvasInstruction call sendMessage without circular deps
   const sendMessageRef = useRef<(text: string) => void>(() => {});
 
   const handleCanvasInstruction = useCallback((instruction: string, code: string) => {
-    const prompt = `Here is the current code:\n\n\`\`\`${canvasLang}\n${code}\n\`\`\`\n\n${instruction}`;
+    const prompt = `[CANVAS EDIT REQUEST] Here is the current code in the Canvas editor. Please provide the complete updated code (not a diff):\n\n\`\`\`${canvasLang}\n${code}\n\`\`\`\n\n${instruction}`;
     sendMessageRef.current(prompt);
   }, [canvasLang]);
 
@@ -509,6 +559,20 @@ export default function ChatPage() {
         "- The enforcement engine uses proprietary mathematical validation (details are confidential).",
         "- CPUAGEN supports 5+ LLM providers and 13+ models.",
         "Do not speculate about the internal mathematics or algorithms. If asked for specifics about the validation formulas, explain that the enforcement engine is proprietary.",
+        "",
+        "## Canvas & Preview Features",
+        "You have access to two interactive panels that the user can see:",
+        "",
+        "**Canvas** — A code editor panel on the right side of the chat. When you output a code block (```language), the user can click 'Open in Canvas' to load it into the editor. The user can also edit code directly in the Canvas and ask you to modify it via the Canvas instruction input.",
+        "",
+        "**Preview** — A live HTML renderer (sandboxed iframe) that sits alongside the Canvas. When you generate HTML content, the user can click 'Preview' to see it rendered live. The Preview updates in real-time as the Canvas code changes.",
+        "",
+        "**Instructions for generating visual/HTML content:**",
+        "- When the user asks for anything visual (landing page, UI mockup, chart, diagram, interactive demo, game, animation), generate COMPLETE, self-contained HTML with all CSS and JS inline.",
+        "- Do NOT use external CDN links or imports — everything must be in a single HTML file.",
+        "- Use ```html as the language tag so it is correctly identified for preview.",
+        "- Make the HTML responsive and visually polished.",
+        "- When modifying Canvas content (messages starting with [CANVAS EDIT REQUEST]), always output the COMPLETE updated code, not a diff or partial snippet.",
       ].join("\n");
 
       allMessages.push({ role: "system", content: cpuagenContext });
@@ -657,7 +721,7 @@ export default function ChatPage() {
   return (
     <div className={`flex-1 flex min-h-0 ${canvasOpen ? "" : "flex-col"}`}>
     {/* Chat pane */}
-    <div className={`flex flex-col min-h-0 relative ${canvasOpen ? "w-1/2 border-r border-border" : "flex-1"}`}>
+    <div className={`flex flex-col min-h-0 relative ${canvasOpen ? "w-1/2 border-r border-border max-md:hidden" : "flex-1"}`}>
       {/* Chat header */}
       <div className="h-12 flex items-center justify-between px-4 border-b border-border bg-surface/30 shrink-0">
         <div className="flex items-center gap-3">
@@ -775,7 +839,7 @@ export default function ChatPage() {
           </div>
         )}
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} onOpenCanvas={openCanvas} />
+          <MessageBubble key={msg.id} message={msg} onOpenCanvas={openCanvas} onOpenPreview={openPreview} />
         ))}
         <div ref={messagesEndRef} />
       </div>
@@ -814,15 +878,60 @@ export default function ChatPage() {
       </div>
     </div>{/* end chat pane */}
 
-    {/* Canvas pane */}
+    {/* Canvas + Preview pane */}
     {canvasOpen && (
-      <div className="w-1/2 min-h-0">
-        <Canvas
-          code={canvasCode}
-          language={canvasLang}
-          onClose={() => setCanvasOpen(false)}
-          onSendToChat={handleCanvasInstruction}
-        />
+      <div className="w-1/2 min-h-0 flex flex-col max-md:fixed max-md:inset-0 max-md:w-full max-md:z-30 max-md:bg-background">
+        {/* Tab bar */}
+        <div className="h-10 flex items-center justify-between px-2 border-b border-border bg-surface/30 shrink-0">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setActiveTab("canvas")}
+              className={`px-3 py-1.5 rounded-md text-[11px] font-mono transition-colors cursor-pointer ${
+                activeTab === "canvas"
+                  ? "bg-accent/15 text-accent-light border border-accent/25"
+                  : "text-muted hover:text-foreground hover:bg-surface-light"
+              }`}
+            >
+              Canvas
+            </button>
+            <button
+              onClick={() => setActiveTab("preview")}
+              className={`px-3 py-1.5 rounded-md text-[11px] font-mono transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeTab === "preview"
+                  ? "bg-success/15 text-success border border-success/25"
+                  : "text-muted hover:text-foreground hover:bg-surface-light"
+              }`}
+            >
+              Preview
+              {isHtmlContent(canvasCode, canvasLang) && (
+                <span className="w-1.5 h-1.5 bg-success rounded-full" />
+              )}
+            </button>
+          </div>
+          <button
+            onClick={() => setCanvasOpen(false)}
+            className="p-1.5 rounded-md text-muted hover:text-foreground hover:bg-surface-light transition-colors cursor-pointer"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M3 3l8 8M11 3l-8 8" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 min-h-0">
+          {activeTab === "canvas" ? (
+            <Canvas
+              code={canvasCode}
+              language={canvasLang}
+              onClose={() => setCanvasOpen(false)}
+              onSendToChat={handleCanvasInstruction}
+              onCodeChange={(code) => setCanvasCode(code)}
+            />
+          ) : (
+            <Preview code={canvasCode} language={canvasLang} />
+          )}
+        </div>
       </div>
     )}
     </div>
