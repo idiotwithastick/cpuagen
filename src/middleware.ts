@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const SITE_PASSWORD = process.env.SITE_PASSWORD || "026F3AA3A";
+const SITE_PASSWORD = "026F3AA3A";
 
 export function middleware(request: NextRequest) {
   // Check for auth cookie
@@ -16,25 +16,37 @@ export function middleware(request: NextRequest) {
 
   // Check URL param for password (for simple auth flow)
   const url = request.nextUrl;
-  if (url.searchParams.get("pwd") === SITE_PASSWORD) {
-    const response = NextResponse.redirect(new URL("/", request.url));
-    response.cookies.set("cpuagen-auth", "authenticated", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      maxAge: 60 * 60 * 24 * 30, // 30 days
+  const submittedPwd = url.searchParams.get("pwd");
+
+  if (submittedPwd !== null) {
+    if (submittedPwd === SITE_PASSWORD) {
+      const dest = new URL("/", request.url);
+      dest.searchParams.delete("pwd");
+      const response = NextResponse.redirect(dest);
+      response.cookies.set("cpuagen-auth", "authenticated", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+      });
+      return response;
+    }
+
+    // Wrong password — show login with error
+    return new NextResponse(getLoginHTML(true), {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
     });
-    return response;
   }
 
-  // Show login page
-  return new NextResponse(getLoginHTML(), {
+  // No password submitted — show login page
+  return new NextResponse(getLoginHTML(false), {
     status: 200,
     headers: { "Content-Type": "text/html" },
   });
 }
 
-function getLoginHTML(): string {
+function getLoginHTML(showError = false): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,7 +134,7 @@ function getLoginHTML(): string {
       color: #ef4444;
       font-size: 0.75rem;
       margin-top: 1rem;
-      display: none;
+      display: ${showError ? "block" : "none"};
     }
   </style>
 </head>
