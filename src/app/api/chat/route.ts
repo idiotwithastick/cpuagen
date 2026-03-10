@@ -1,4 +1,4 @@
-import { thermosolve, cbfCheck, generateTeepId } from "@/lib/enforcement";
+import { thermosolve, cbfCheck, commitTeep } from "@/lib/enforcement";
 import { recordEnforcementRequest, recordTeepCached } from "@/lib/security-state";
 
 export const runtime = "nodejs";
@@ -353,7 +353,18 @@ export async function POST(req: Request) {
           encoder.encode(sseEvent({
             type: "enforcement",
             stage: "pre",
-            signature: { n: preSig.n, phi: preSig.phi },
+            signature: {
+              n: preSig.n,
+              S: preSig.S,
+              dS: preSig.dS,
+              phi: preSig.phi,
+              I_truth: preSig.I_truth,
+              naturality: preSig.naturality,
+              beta_T: preSig.beta_T,
+              psi_coherence: preSig.psi_coherence,
+              synergy: preSig.synergy,
+              cache_hit: preSig.cache_hit,
+            },
             cbf: sanitizeCbf(preCbf),
           })),
         );
@@ -393,22 +404,35 @@ export async function POST(req: Request) {
         if (fullContent) {
           const postSig = thermosolve(fullContent);
           const postCbf = cbfCheck(postSig);
-          const teepId = generateTeepId();
+
+          // AGF Protocol Step 5: Commit to TEEP ledger for future O(1) hits
+          const teepId = commitTeep(fullContent, postSig, postCbf.allSafe as boolean);
 
           // Record post-enforcement to admin dashboard
           const failedPost = Object.entries(postCbf)
             .filter(([k, v]) => k !== "allSafe" && v !== true)
             .map(([k]) => k);
           recordEnforcementRequest(postCbf.allSafe as boolean, failedPost.length > 0 ? failedPost : undefined, requestIp, "POST-VALIDATION");
-          recordTeepCached(`CACHED-${teepId.split("-")[1]}`, requestIp);
+          recordTeepCached(teepId, requestIp);
 
           controller.enqueue(
             encoder.encode(sseEvent({
               type: "enforcement",
               stage: "post",
-              signature: { n: postSig.n, phi: postSig.phi },
+              signature: {
+                n: postSig.n,
+                S: postSig.S,
+                dS: postSig.dS,
+                phi: postSig.phi,
+                I_truth: postSig.I_truth,
+                naturality: postSig.naturality,
+                beta_T: postSig.beta_T,
+                psi_coherence: postSig.psi_coherence,
+                synergy: postSig.synergy,
+                cache_hit: postSig.cache_hit,
+              },
               cbf: sanitizeCbf(postCbf),
-              teepId: `CACHED-${teepId.split("-")[1]}`,
+              teepId,
             })),
           );
         }

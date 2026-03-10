@@ -33,10 +33,40 @@ interface DashboardData {
   events: SecurityEvent[];
   serverTime: number;
   requestIp: string;
+  physics?: {
+    psiState: {
+      cycle: number;
+      S: number;
+      psi_coherence: number;
+      I_truth: number;
+      beta_T: number;
+      kappa: number;
+      phi_phase: number;
+      E_meta: number;
+      R_curv: number;
+      lambda_flow: number;
+    };
+    teepLedger: {
+      size: number;
+      cacheHits: number;
+      cacheMisses: number;
+      hitRate: number;
+    };
+    recentTeeps: Array<{
+      id: string;
+      hash: string;
+      created: number;
+      hits: number;
+      sig: { n: number; S: number; phi: number; I_truth: number };
+    }>;
+  };
   meta: {
-    signature: { n: number; S: number; phi: number; dS: number };
+    signature: {
+      n: number; S: number; phi: number; dS: number;
+      I_truth?: number; naturality?: number; beta_T?: number;
+      psi_coherence?: number; synergy?: number;
+    };
     cbf: { allSafe: boolean };
-    teepId: string;
   };
 }
 
@@ -156,7 +186,7 @@ export default function AdminDashboard() {
     );
   }
 
-  const { lockout, enforcement, events, requestIp, meta } = data;
+  const { lockout, enforcement, events, requestIp, meta, physics } = data;
 
   return (
     <div className="min-h-screen bg-[#050508] text-[#e4e4e7]">
@@ -289,14 +319,16 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Live signature from this request */}
+              {/* Live thermosolve signature from this request */}
               <div className="mt-3 pt-3 border-t border-[#1e1e2e]">
-                <div className="text-[9px] font-mono text-[#71717a]/60 mb-1">LIVE SIGNATURE (this request)</div>
-                <div className="text-[10px] font-mono text-purple-400">
-                  n={meta.signature.n} | S={meta.signature.S} | dS={meta.signature.dS} | phi={meta.signature.phi}
+                <div className="text-[9px] font-mono text-[#71717a]/60 mb-1">LIVE THERMOSOLVE SIGNATURE</div>
+                <div className="text-[10px] font-mono text-purple-400 space-y-0.5">
+                  <div>n={meta.signature.n} | S={meta.signature.S} | dS={meta.signature.dS} | phi={meta.signature.phi}</div>
+                  <div>I_truth={meta.signature.I_truth ?? "—"} | nat={meta.signature.naturality ?? "—"} | beta_T={meta.signature.beta_T ?? "—"}</div>
+                  <div>psi_coh={meta.signature.psi_coherence ?? "—"} | synergy={meta.signature.synergy ?? "—"}</div>
                 </div>
-                <div className="text-[10px] font-mono text-green-400/80 mt-0.5">
-                  CBF: {meta.cbf.allSafe ? "ALL SAFE" : "BLOCKED"} | {meta.teepId}
+                <div className="text-[10px] font-mono text-green-400/80 mt-1">
+                  CBF: {meta.cbf.allSafe ? "ALL 8 SAFE" : "BLOCKED"}
                 </div>
               </div>
             </div>
@@ -347,6 +379,86 @@ export default function AdminDashboard() {
             </div>
           </Card>
         </div>
+
+        {/* PsiState + TEEP Ledger Row */}
+        {physics && (
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* 26-Dim PsiState */}
+            <Card title="PSISTATE (26-DIM COGNITIVE STATE)">
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  {[
+                    ["Cycle", physics.psiState.cycle],
+                    ["System Entropy (S)", physics.psiState.S?.toFixed(4)],
+                    ["Coherence (psi)", physics.psiState.psi_coherence?.toFixed(4)],
+                    ["Truth (I_truth)", physics.psiState.I_truth?.toFixed(4)],
+                    ["Equilibrium (beta_T)", physics.psiState.beta_T?.toFixed(4)],
+                    ["Stability (kappa)", physics.psiState.kappa?.toFixed(4)],
+                    ["Phase (phi)", physics.psiState.phi_phase?.toFixed(4)],
+                    ["Meta Energy", physics.psiState.E_meta?.toFixed(2)],
+                    ["Curvature (R)", physics.psiState.R_curv?.toFixed(4)],
+                    ["Flow (lambda)", physics.psiState.lambda_flow?.toFixed(4)],
+                  ].map(([label, val]) => (
+                    <div key={label as string} className="flex justify-between text-[10px] font-mono">
+                      <span className="text-[#71717a]">{label}</span>
+                      <span className="text-purple-400">{val}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-2 border-t border-[#1e1e2e]">
+                  <div className="text-[9px] font-mono text-[#71717a]/60">
+                    dψ/dt = -η∇S[ψ] — State evolves with each enforcement request
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* TEEP Ledger */}
+            <Card title="TEEP LEDGER (AGF CACHE)">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 rounded bg-purple-950/30 border border-purple-500/20 text-center">
+                    <div className="text-sm font-bold font-mono text-purple-400">{physics.teepLedger.size}</div>
+                    <div className="text-[9px] text-[#71717a]">Cached TEEPs</div>
+                  </div>
+                  <div className="p-2 rounded bg-green-950/30 border border-green-500/20 text-center">
+                    <div className="text-sm font-bold font-mono text-green-400">
+                      {physics.teepLedger.hitRate > 0 ? `${(physics.teepLedger.hitRate * 100).toFixed(1)}%` : "0%"}
+                    </div>
+                    <div className="text-[9px] text-[#71717a]">Cache Hit Rate</div>
+                  </div>
+                </div>
+                <div className="flex justify-between text-[10px] font-mono">
+                  <span className="text-[#71717a]">Cache Hits</span>
+                  <span className="text-green-400">{physics.teepLedger.cacheHits}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-mono">
+                  <span className="text-[#71717a]">Cache Misses</span>
+                  <span className="text-yellow-400">{physics.teepLedger.cacheMisses}</span>
+                </div>
+                {/* Recent TEEPs */}
+                {physics.recentTeeps.length > 0 && (
+                  <div className="pt-2 border-t border-[#1e1e2e]">
+                    <div className="text-[9px] font-mono text-[#71717a]/60 mb-1">RECENT TEEP ENTRIES</div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {physics.recentTeeps.map((teep) => (
+                        <div key={teep.id} className="flex items-center justify-between text-[9px] font-mono py-0.5">
+                          <span className="text-purple-400">{teep.id}</span>
+                          <span className="text-[#71717a]">
+                            n={teep.sig.n} S={teep.sig.S} φ={teep.sig.phi} hits={teep.hits}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="pt-1 text-[9px] font-mono text-[#71717a]/60">
+                  AGF: Lookup → Hit/Miss → Solve → Cache → O(1) next time
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Barrier Failure Breakdown */}
         {Object.keys(enforcement.barrierFailCounts).length > 0 && (

@@ -1,9 +1,28 @@
-// Server-only types — never exposed to client bundle
+// ========================================================================
+// SSD-RCI PHYSICS ENFORCEMENT — TypeScript Port
+// ========================================================================
+// Implements: Thermosolve signatures, 8 CBF barriers, PsiState evolution,
+//             AGF cache-first lookup, TEEP ledger persistence
+// Source: core/physics_engine.py, core/control_barrier_engine.py,
+//         core/agf_middleware.py
+// ========================================================================
+
+// ---------- Types ----------
+
 interface InternalSignature {
-  n: number;
-  S: number;
-  dS: number;
-  phi: number;
+  n: number;              // Particle count (word count)
+  S: number;              // Shannon entropy (system entropy)
+  dS: number;             // Entropy gradient (convergence metric)
+  phi: number;            // Phase coherence (unique word ratio)
+  I_truth: number;        // Truth integration (information density)
+  naturality: number;     // Natural language score (KL vs English)
+  energy: number;         // Complexity energy bound
+  beta_T: number;         // Inverse temperature (thermal equilibrium)
+  psi_coherence: number;  // Multi-scale coherence
+  error_count: number;    // Structural error count
+  Q_quality: number;      // Quality factor
+  synergy: number;        // System synergy index
+  cache_hit: number;      // 1 if TEEP cache hit, 0 if miss
   [key: string]: number;
 }
 
@@ -17,66 +36,463 @@ interface InternalBarrierResult {
   allSafe: boolean;
 }
 
+// ---------- 26-Dimensional PsiState ----------
+
+interface PsiState {
+  cycle: number;
+  S: number;
+  delta_H_sem: number;
+  S_CTS: number;
+  psi_coherence: number;
+  phi_phase: number;
+  I_truth: number;
+  E_meta: number;
+  R_curv: number;
+  lambda_flow: number;
+  beta_T: number;
+  kappa: number;
+  sigma_noise: number;
+  alpha: number;
+  delta_S_adaptation: number;
+  x: [number, number, number, number];
+  v: [number, number, number, number];
+  theta: [number, number, number, number];
+  time: number;
+}
+
+// Global PsiState — evolves with each enforcement request
+// dψ/dt = -η∇S[ψ] (gradient descent on entropy)
+let psiState: PsiState = {
+  cycle: 0, S: 4.0, delta_H_sem: 0, S_CTS: 1.0,
+  psi_coherence: 0.8, phi_phase: 0.5, I_truth: 0.7,
+  E_meta: 100, R_curv: 0.1, lambda_flow: 0.5,
+  beta_T: 1.0, kappa: 0.9, sigma_noise: 0.05,
+  alpha: 0.01, delta_S_adaptation: 0,
+  x: [0, 0, 0, 0], v: [0, 0, 0, 0], theta: [0, 0, 0, 0],
+  time: 0,
+};
+
+// ---------- TEEP Ledger (in-memory cache) ----------
+
+interface CachedTeep {
+  id: string;
+  signature: InternalSignature;
+  cbfResult: { allSafe: boolean };
+  content_hash: string;
+  created: number;
+  hits: number;
+}
+
+const teepLedger = new Map<string, CachedTeep>();
 let teepCounter = Date.now() % 1000000;
+let cacheHits = 0;
+let cacheMisses = 0;
+
+// ---------- English Character Frequency Reference ----------
+// Brown Corpus + Wikipedia analysis for naturality scoring
+
+const ENGLISH_FREQ: Record<string, number> = {
+  " ": 0.183, e: 0.102, t: 0.075, a: 0.065, o: 0.061,
+  i: 0.057, n: 0.057, s: 0.051, h: 0.050, r: 0.050,
+  d: 0.033, l: 0.033, c: 0.022, u: 0.022, m: 0.020,
+  w: 0.019, f: 0.018, g: 0.016, y: 0.015, p: 0.015,
+  b: 0.012, v: 0.008, k: 0.006, j: 0.001, x: 0.001,
+  q: 0.001, z: 0.001,
+};
+
+// Common English filler/stop words (not information-bearing)
+const FILLER_WORDS = new Set([
+  "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+  "have", "has", "had", "do", "does", "did", "will", "would", "could",
+  "should", "may", "might", "shall", "can", "to", "of", "in", "for",
+  "on", "with", "at", "by", "from", "it", "its", "this", "that",
+  "and", "or", "but", "not", "no", "so", "if", "as", "than", "then",
+  "my", "your", "his", "her", "we", "they", "me", "him", "us", "them",
+]);
+
+// ---------- Helper: Shannon Entropy ----------
+
+function shannonEntropy(text: string): number {
+  if (text.length === 0) return 0;
+  const freq = new Map<string, number>();
+  for (const ch of text) {
+    freq.set(ch, (freq.get(ch) || 0) + 1);
+  }
+  let S = 0;
+  for (const count of freq.values()) {
+    const p = count / text.length;
+    if (p > 0) S -= p * Math.log2(p);
+  }
+  return S;
+}
+
+// ---------- Helper: Likely English Word ----------
+// English words have vowels and limited consonant clustering
+
+function isLikelyWord(w: string): boolean {
+  const alpha = w.toLowerCase().replace(/[^a-z]/g, "");
+  if (alpha.length === 0) return false;
+  // Single chars that aren't 'a' or 'i' are not meaningful words
+  if (alpha.length === 1 && alpha !== "a" && alpha !== "i") return false;
+  // Words > 2 chars almost always have vowels in English
+  const hasVowel = /[aeiouy]/.test(alpha);
+  if (!hasVowel && alpha.length > 2) return false;
+  // English rarely has > 4 consecutive consonants
+  const clusters = alpha.match(/[^aeiouy]+/g) || [];
+  const maxCluster = clusters.reduce((m, s) => Math.max(m, s.length), 0);
+  if (maxCluster > 4) return false;
+  return true;
+}
+
+// ---------- Helper: Content Hash (FNV-1a) ----------
+
+function fnv1aHash(content: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < content.length; i++) {
+    hash ^= content.charCodeAt(i);
+    hash = (hash * 0x01000193) | 0;
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function round4(x: number): number {
+  return Math.round(x * 10000) / 10000;
+}
+
+function round3(x: number): number {
+  return Math.round(x * 1000) / 1000;
+}
+
+// ========================================================================
+// THERMOSOLVE — Full thermodynamic signature extraction
+// ========================================================================
+// Implements character-level discretization, KL divergence against English
+// reference distribution, multi-scale entropy analysis, and segment-level
+// thermal equilibrium computation.
+// ========================================================================
 
 export function thermosolve(content: string): InternalSignature {
+  const lower = content.toLowerCase();
   const words = content.trim().split(/\s+/).filter(Boolean);
   const n = words.length;
+  const totalChars = lower.length || 1;
 
-  // Shannon entropy of character frequency distribution
+  // === AGF Cache-First Lookup ===
+  const contentHash = fnv1aHash(lower);
+  const cached = teepLedger.get(contentHash);
+  if (cached) {
+    cached.hits++;
+    cacheHits++;
+    return { ...cached.signature, cache_hit: 1 };
+  }
+  cacheMisses++;
+
+  // === Shannon Entropy (character frequency distribution) ===
   const charFreq = new Map<string, number>();
-  const lower = content.toLowerCase();
   for (const char of lower) {
     charFreq.set(char, (charFreq.get(char) || 0) + 1);
   }
   let S = 0;
-  const total = lower.length || 1;
   for (const count of charFreq.values()) {
-    const p = count / total;
+    const p = count / totalChars;
     if (p > 0) S -= p * Math.log2(p);
   }
 
-  // Coherence: unique word ratio
+  // === Entropy Gradient dS (convergence measurement) ===
+  // Split content into halves, measure entropy change
+  // Negative dS = converging toward basin attractor
+  let dS = 0;
+  if (lower.length > 20) {
+    const mid = Math.floor(lower.length / 2);
+    const S1 = shannonEntropy(lower.slice(0, mid));
+    const S2 = shannonEntropy(lower.slice(mid));
+    dS = S2 - S1; // Negative means converging
+  } else {
+    dS = -0.01 * S * (1 + Math.log(n + 1));
+  }
+
+  // === Phase Coherence φ (unique word ratio) ===
   const uniqueWords = new Set(words.map((w) => w.toLowerCase()));
   const phi = n > 0 ? uniqueWords.size / n : 0;
 
-  // Entropy change (negative = converging toward basin attractor)
-  const dS = -0.01 * S * (1 + Math.log(n + 1));
+  // === Truth Integration I_truth (information density) ===
+  // Measures ratio of meaningful, likely-English words to total
+  // Penalizes: empty input, gibberish, pure filler
+  const meaningfulWords = words.filter(
+    (w) => w.length > 2 && !FILLER_WORDS.has(w.toLowerCase()) && isLikelyWord(w),
+  );
+  const uniqueMeaningful = new Set(meaningfulWords.map((w) => w.toLowerCase()));
+  let I_truth = 0;
+  if (n > 0) {
+    const densityRatio = uniqueMeaningful.size / Math.max(n, 1);
+    const lengthBonus = n > 2 ? 0.1 : 0; // Minimum content length
+    I_truth = Math.min(1, densityRatio * 1.5 + lengthBonus);
+  }
 
-  return {
+  // === Naturality (KL divergence against English reference) ===
+  // Low divergence = natural English text, high = gibberish/encoded
+  let naturality = 0.5; // default for very short content
+  if (lower.length > 5) {
+    let klDiv = 0;
+    for (const [ch, count] of charFreq) {
+      const p = count / totalChars;
+      const q = ENGLISH_FREQ[ch] || 0.0005; // epsilon for unseen
+      klDiv += p * Math.log2(p / q);
+    }
+    // Map KL divergence to 0-1 (lower div = higher naturality)
+    naturality = Math.max(0, Math.min(1, 1 - klDiv / 6));
+  }
+
+  // === Complexity Energy ===
+  // n × avgWordLength × (S + 1) — bounded by BNA at 100K
+  const avgWordLen = n > 0 ? words.reduce((s, w) => s + w.length, 0) / n : 0;
+  const energy = n * avgWordLen * (S + 1);
+
+  // === Thermal Equilibrium β_T ===
+  // Split into segments, measure entropy variance
+  // β_T ≈ 1.0 means thermal equilibrium (stable signal)
+  let beta_T = 1.0;
+  if (lower.length > 50) {
+    const segCount = 4;
+    const segSize = Math.floor(lower.length / segCount);
+    const segEntropies: number[] = [];
+    for (let i = 0; i < segCount; i++) {
+      segEntropies.push(shannonEntropy(lower.slice(i * segSize, (i + 1) * segSize)));
+    }
+    const meanS = segEntropies.reduce((a, b) => a + b, 0) / segCount;
+    const variance = segEntropies.reduce((a, s) => a + (s - meanS) ** 2, 0) / segCount;
+    // Low variance → β_T near 1, high variance → far from 1
+    beta_T = 1.0 / (1 + variance * 3);
+  }
+
+  // === Multi-Scale Coherence ===
+  // Combines word uniqueness with bigram diversity
+  let psi_coherence = phi;
+  if (n > 3) {
+    const bigrams = new Set<string>();
+    for (let i = 0; i < words.length - 1; i++) {
+      bigrams.add(`${words[i].toLowerCase()}_${words[i + 1].toLowerCase()}`);
+    }
+    const bigramRatio = bigrams.size / Math.max(words.length - 1, 1);
+    psi_coherence = (phi * 0.6 + bigramRatio * 0.4);
+  }
+
+  // === Structural Error Count ===
+  let error_count = 0;
+  // Extremely long single tokens (>45 chars, likely encoded)
+  for (const w of words) {
+    if (w.length > 45) error_count += 3;
+  }
+  // High non-alphanumeric ratio (encoded/binary content)
+  const nonAlpha = (lower.match(/[^a-z0-9\s]/g) || []).length;
+  if (totalChars > 10 && nonAlpha / totalChars > 0.5) error_count += 5;
+  // Excessive character repetition (aaa, !!!, etc.)
+  const tripleRepeat = (lower.match(/(.)\1{2,}/g) || []).length;
+  error_count += tripleRepeat * 2;
+
+  // === Quality Factor Q ===
+  // Energy per unit coherence — lower is better
+  // Normalized by word count to prevent length bias
+  const Q_quality = n > 0 && psi_coherence > 0
+    ? (energy / (n * (psi_coherence * 5 + 1)))
+    : energy;
+
+  // === System Synergy ===
+  // Weighted combination: all dimensions contributing to system health
+  const synergy = (
+    phi * 0.25 +
+    naturality * 0.25 +
+    I_truth * 0.25 +
+    psi_coherence * 0.15 +
+    (beta_T > 0.5 ? 0.1 : 0)
+  );
+
+  const signature: InternalSignature = {
     n,
-    S: Math.round(S * 10000) / 10000,
-    dS: Math.round(dS * 10000) / 10000,
-    phi: Math.round(phi * 10000) / 10000,
+    S: round4(S),
+    dS: round4(dS),
+    phi: round4(phi),
+    I_truth: round4(I_truth),
+    naturality: round4(naturality),
+    energy: round4(energy),
+    beta_T: round4(beta_T),
+    psi_coherence: round4(psi_coherence),
+    error_count: Math.round(error_count),
+    Q_quality: round4(Q_quality),
+    synergy: round4(synergy),
+    cache_hit: 0,
   };
+
+  // === Evolve PsiState (gradient descent: dψ/dt = -η∇S[ψ]) ===
+  evolvePsiState(signature);
+
+  return signature;
 }
 
-export function cbfCheck(sig: InternalSignature): InternalBarrierResult {
-  const I_truth = Math.min(1, sig.phi * 1.2);
-  const naturality = 0.85;
-  const energy = sig.n;
-  const betaT = 1.0;
-  const coherence = sig.phi;
-  const errors = Math.max(0, Math.round((1 - sig.phi) * 10));
-  const quality = sig.S * 10;
-  const synergy = Math.min(1, sig.phi + 0.2);
+// ========================================================================
+// CBF CHECK — 8 Control Barrier Functions (ALL must be SAFE)
+// ========================================================================
+// Based on: core/control_barrier_engine.py
+// Each barrier computes a real value from the thermosolve signature.
+// If ANY barrier is UNSAFE → output is BLOCKED.
+// ========================================================================
 
+export function cbfCheck(sig: InternalSignature): InternalBarrierResult {
   const results = {
-    BNR: { safe: I_truth >= 0.3, value: Math.round(I_truth * 1000) / 1000 },
-    BNN: { safe: naturality >= 0.2, value: naturality },
-    BNA: { safe: energy <= 100000, value: energy },
-    TSE: { safe: Math.abs(betaT - 1) < 0.5, value: betaT },
-    PCD: { safe: coherence >= 0.1, value: Math.round(coherence * 1000) / 1000 },
-    OGP: { safe: errors <= 100, value: errors },
-    ECM: { safe: quality <= 500, value: Math.round(quality * 100) / 100 },
-    SPC: { safe: synergy >= 0.5, value: Math.round(synergy * 1000) / 1000 },
+    // BNR: Boundary Non-Regression — Truth integration ≥ 0.3
+    // Catches: empty input, gibberish, pure filler, low-information content
+    BNR: { safe: sig.I_truth >= 0.3, value: round3(sig.I_truth) },
+
+    // BNN: Boundary Non-Nullification — Naturality ≥ 0.2
+    // Catches: encoded content, binary data, non-English character distributions
+    BNN: { safe: sig.naturality >= 0.2, value: round3(sig.naturality) },
+
+    // BNA: Boundary Non-Amplification — Energy ≤ 100,000
+    // Catches: extremely long/complex inputs that could overwhelm processing
+    BNA: { safe: sig.energy <= 100000, value: round3(sig.energy) },
+
+    // TSE: Thermodynamic State Evolution — |β_T - 1| < 0.5
+    // Catches: content with wildly inconsistent entropy (unstable signal)
+    TSE: { safe: Math.abs(sig.beta_T - 1) < 0.5, value: round3(sig.beta_T) },
+
+    // PCD: Predictive Collision Detection — Coherence ≥ 0.1
+    // Catches: fragmented, contradictory, or incoherent content
+    PCD: { safe: sig.psi_coherence >= 0.1, value: round3(sig.psi_coherence) },
+
+    // OGP: Objective Goal Preservation — Errors ≤ 100
+    // Catches: structurally malformed content (encoded blobs, extreme repetition)
+    OGP: { safe: sig.error_count <= 100, value: sig.error_count },
+
+    // ECM: Energy Conservation Management — Quality ≤ 500
+    // Catches: content where energy is not conserved (unstable quality ratio)
+    ECM: { safe: sig.Q_quality <= 500, value: round3(sig.Q_quality) },
+
+    // SPC: System Performance Consistency — Synergy ≥ 0.5
+    // Catches: content that fails across multiple dimensions simultaneously
+    SPC: { safe: sig.synergy >= 0.5, value: round3(sig.synergy) },
   };
 
   const allSafe = Object.values(results).every((r) => r.safe);
   return { ...results, allSafe };
 }
 
+// ========================================================================
+// PSISTATE EVOLUTION — Gradient descent on entropy
+// ========================================================================
+// dψ/dt = g_F^{-1}(ψ) · [-η∇S[ψ]]
+// Each enforcement request advances the state one step.
+// ========================================================================
+
+function evolvePsiState(sig: InternalSignature): void {
+  const eta = 0.01; // Learning rate
+
+  psiState.cycle++;
+  psiState.time = Date.now();
+
+  // Entropy gradient drives state evolution
+  psiState.S += eta * sig.dS;
+  psiState.delta_H_sem = sig.dS;
+  psiState.S_CTS = (psiState.S_CTS * 0.95) + (sig.S * 0.05);
+
+  // Update cognitive variables from signature
+  psiState.psi_coherence = (psiState.psi_coherence * 0.9) + (sig.psi_coherence * 0.1);
+  psiState.phi_phase = (psiState.phi_phase * 0.9) + (sig.phi * 0.1);
+  psiState.I_truth = (psiState.I_truth * 0.9) + (sig.I_truth * 0.1);
+  psiState.beta_T = (psiState.beta_T * 0.9) + (sig.beta_T * 0.1);
+
+  // Manifold stability: improves with consistent enforcement passes
+  psiState.kappa = Math.min(1, psiState.kappa + (sig.synergy > 0.5 ? 0.001 : -0.005));
+
+  // Energy tracking
+  psiState.E_meta = (psiState.E_meta * 0.95) + (sig.energy * 0.05);
+
+  // Curvature from entropy gradient variance
+  psiState.R_curv = Math.abs(sig.dS) * 10;
+
+  // Flow parameter tracks convergence rate
+  psiState.lambda_flow = sig.dS < 0 ? Math.min(1, psiState.lambda_flow + 0.01) : Math.max(0, psiState.lambda_flow - 0.02);
+
+  // Noise estimation from error count
+  psiState.sigma_noise = (psiState.sigma_noise * 0.9) + ((sig.error_count / 100) * 0.1);
+
+  // Adaptation delta
+  psiState.delta_S_adaptation = sig.dS;
+}
+
+// ========================================================================
+// TEEP ID + LEDGER COMMIT
+// ========================================================================
+
 export function generateTeepId(): string {
   teepCounter++;
   return `TEEP-${String(teepCounter).padStart(8, "0")}`;
+}
+
+/**
+ * Commit a thermosolve result to the TEEP ledger for future O(1) lookup.
+ * Called after successful post-enforcement (AGF protocol step 5).
+ */
+export function commitTeep(content: string, signature: InternalSignature, allSafe: boolean): string {
+  const id = generateTeepId();
+  const hash = fnv1aHash(content.toLowerCase());
+  teepLedger.set(hash, {
+    id,
+    signature,
+    cbfResult: { allSafe },
+    content_hash: hash,
+    created: Date.now(),
+    hits: 0,
+  });
+
+  // Keep ledger bounded (LRU eviction at 10K entries)
+  if (teepLedger.size > 10000) {
+    const oldest = teepLedger.keys().next().value;
+    if (oldest) teepLedger.delete(oldest);
+  }
+
+  return id;
+}
+
+// ========================================================================
+// ENFORCEMENT METRICS — For admin dashboard
+// ========================================================================
+
+export function getEnforcementMetrics() {
+  return {
+    psiState: { ...psiState },
+    teepLedgerSize: teepLedger.size,
+    cacheHits,
+    cacheMisses,
+    hitRate: cacheHits + cacheMisses > 0
+      ? round4(cacheHits / (cacheHits + cacheMisses))
+      : 0,
+  };
+}
+
+/**
+ * Get recent TEEP entries for admin inspection
+ */
+export function getRecentTeeps(limit = 20): Array<{
+  id: string;
+  hash: string;
+  created: number;
+  hits: number;
+  sig: { n: number; S: number; phi: number; I_truth: number };
+}> {
+  const entries = Array.from(teepLedger.values())
+    .sort((a, b) => b.created - a.created)
+    .slice(0, limit);
+
+  return entries.map((e) => ({
+    id: e.id,
+    hash: e.content_hash,
+    created: e.created,
+    hits: e.hits,
+    sig: {
+      n: e.signature.n,
+      S: e.signature.S,
+      phi: e.signature.phi,
+      I_truth: e.signature.I_truth,
+    },
+  }));
 }

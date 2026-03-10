@@ -1,4 +1,4 @@
-import { thermosolve, cbfCheck, generateTeepId } from "@/lib/enforcement";
+import { thermosolve, cbfCheck, getEnforcementMetrics, getRecentTeeps } from "@/lib/enforcement";
 import {
   getLockoutData,
   getEnforcementStats,
@@ -35,11 +35,14 @@ export async function GET(req: Request) {
   // SSD-RCI enforcement on the stats request itself
   const sig = thermosolve(`admin_stats_request:${ip}:${Date.now()}`);
   const cbf = cbfCheck(sig);
-  const teepId = generateTeepId();
 
   const lockout = getLockoutData();
   const enforcement = getEnforcementStats();
   const events = getSecurityEvents();
+
+  // Physics engine state + TEEP ledger metrics
+  const metrics = getEnforcementMetrics();
+  const recentTeeps = getRecentTeeps(10);
 
   return Response.json({
     lockout,
@@ -47,10 +50,41 @@ export async function GET(req: Request) {
     events: events.slice(-100),
     serverTime: Date.now(),
     requestIp: ip,
+    // Full physics state for admin inspection
+    physics: {
+      psiState: {
+        cycle: metrics.psiState.cycle,
+        S: metrics.psiState.S,
+        psi_coherence: metrics.psiState.psi_coherence,
+        I_truth: metrics.psiState.I_truth,
+        beta_T: metrics.psiState.beta_T,
+        kappa: metrics.psiState.kappa,
+        phi_phase: metrics.psiState.phi_phase,
+        E_meta: metrics.psiState.E_meta,
+        R_curv: metrics.psiState.R_curv,
+        lambda_flow: metrics.psiState.lambda_flow,
+      },
+      teepLedger: {
+        size: metrics.teepLedgerSize,
+        cacheHits: metrics.cacheHits,
+        cacheMisses: metrics.cacheMisses,
+        hitRate: metrics.hitRate,
+      },
+      recentTeeps,
+    },
     meta: {
-      signature: { n: sig.n, S: sig.S, phi: sig.phi, dS: sig.dS },
+      signature: {
+        n: sig.n,
+        S: sig.S,
+        dS: sig.dS,
+        phi: sig.phi,
+        I_truth: sig.I_truth,
+        naturality: sig.naturality,
+        beta_T: sig.beta_T,
+        psi_coherence: sig.psi_coherence,
+        synergy: sig.synergy,
+      },
       cbf: { allSafe: cbf.allSafe },
-      teepId: `STATS-${teepId.split("-")[1]}`,
     },
   });
 }
