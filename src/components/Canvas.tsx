@@ -171,7 +171,7 @@ export default function Canvas({ code, language, onClose, onSendToChat }: Canvas
             Update
           </button>
         </div>
-        <div className="mt-1.5 text-[10px] text-muted/50 font-mono">
+        <div className="mt-1.5 text-[10px] text-muted/70 font-mono">
           Enter to send {"\u00B7"} Tab for indent {"\u00B7"} {editedCode.split("\n").length} lines
         </div>
       </div>

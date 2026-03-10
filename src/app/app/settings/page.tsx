@@ -270,10 +270,10 @@ export default function SettingsPage() {
           <h3 className="text-sm font-medium mb-2">How it works</h3>
           <ol className="text-xs text-muted space-y-1.5 list-decimal list-inside">
             <li>Your message enters the CPUAGEN enforcement pipeline</li>
-            <li>Pre-enforcement: thermosolve signature + 8 CBF validation</li>
-            <li>Message forwarded to your LLM via your API key</li>
-            <li>Post-enforcement: response validated + TEEP cached</li>
-            <li>You see the response with full enforcement metadata</li>
+            <li>8 safety barriers validate the input throughout the process</li>
+            <li>Validated message forwarded to your LLM via your API key</li>
+            <li>Response passes through the same barrier validation</li>
+            <li>Validated answer is cached and delivered with enforcement metadata</li>
           </ol>
         </div>
       </div>

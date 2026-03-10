@@ -41,7 +41,7 @@ function PhysicsOrb() {
       <div className="absolute inset-8 rounded-full border border-accent-light/20 animate-[spin_10s_linear_infinite]" />
       <div className="absolute inset-16 rounded-full bg-gradient-to-br from-accent/40 to-accent-light/20 glow-accent flex items-center justify-center">
         <div className="text-accent-light font-mono text-xs tracking-widest">
-          dS&le;0
+          ENFORCED
         </div>
       </div>
       {[0, 60, 120, 180, 240, 300].map((deg) => (
@@ -96,10 +96,10 @@ function ArchitectureDiagram() {
     {
       label: "CPUAGEN ENGINE",
       items: [
-        "Universal Gateway",
-        "Physics Engine",
-        "CBF (8 Schemes)",
-        "TEEP Cache",
+        "Validation Gateway",
+        "Enforcement Engine",
+        "Safety Barriers (8)",
+        "Knowledge Cache",
       ],
       color: "border-accent/40",
       highlight: true,
@@ -150,11 +150,11 @@ function EnforcementDemo() {
   const [step, setStep] = useState(0);
   const steps = [
     { label: "INBOUND", desc: "Prompt received" },
-    { label: "GATEWAY", desc: "26 pathways" },
-    { label: "PHYSICS", desc: "dS \u2264 0" },
-    { label: "CBF", desc: "8/8 SAFE" },
-    { label: "TEEP", desc: "Basin cached" },
-    { label: "OUTPUT", desc: "Validated" },
+    { label: "GATEWAY", desc: "Route & classify" },
+    { label: "VALIDATE", desc: "8 barriers active", highlight: true },
+    { label: "LLM", desc: "Model responds" },
+    { label: "REVALIDATE", desc: "Output checked", highlight: true },
+    { label: "DELIVER", desc: "Cached & sent" },
   ];
 
   useEffect(() => {
@@ -171,10 +171,10 @@ function EnforcementDemo() {
           <div
             className={`flex flex-col items-center px-3 py-2 rounded-lg border transition-all duration-300 min-w-[90px] ${
               i < step
-                ? "border-success/40 bg-success/5"
+                ? s.highlight ? "border-success/50 bg-success/10 ring-1 ring-success/20" : "border-success/40 bg-success/5"
                 : i === step
-                  ? "border-accent/60 bg-accent/10 glow-accent"
-                  : "border-border bg-surface/30"
+                  ? s.highlight ? "border-accent/80 bg-accent/15 glow-accent ring-1 ring-accent/30" : "border-accent/60 bg-accent/10 glow-accent"
+                  : s.highlight ? "border-accent/20 bg-accent/5" : "border-border bg-surface/30"
             }`}
           >
             <span
@@ -183,12 +183,12 @@ function EnforcementDemo() {
                   ? "text-success"
                   : i === step
                     ? "text-accent-light"
-                    : "text-muted"
+                    : s.highlight ? "text-accent-light/60" : "text-muted"
               }`}
             >
               {s.label}
             </span>
-            <span className="text-[9px] text-muted mt-0.5">{s.desc}</span>
+            <span className={`text-[9px] mt-0.5 ${s.highlight ? "text-accent-light/50" : "text-muted"}`}>{s.desc}</span>
           </div>
           {i < steps.length - 1 && (
             <div
@@ -275,7 +275,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-surface/50 text-xs text-muted mb-8">
             <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse-live" />
-            Engine live &mdash; 7.3M+ solved basins
+            Engine live &mdash; millions of validated responses
           </div>
 
           <h1 className="text-5xl sm:text-7xl font-bold tracking-tight leading-[1.1] mb-6">
@@ -286,9 +286,9 @@ export default function Home() {
 
           <p className="text-lg sm:text-xl text-muted max-w-2xl mx-auto mb-10 leading-relaxed">
             CPUAGEN is the enforcement layer between you and your AI. Every
-            prompt is physics-validated. Every response is barrier-checked.
-            Every answer is permanently cached. Bring Claude, GPT, Gemini,
-            Grok &mdash; we make them honest.
+            prompt is validated. Every response is checked against 8 safety
+            barriers. Every answer is permanently cached. Bring Claude, GPT,
+            Gemini, Grok &mdash; we make them honest.
           </p>
 
           <div className="flex flex-col items-center gap-4 mb-16">
@@ -318,21 +318,19 @@ export default function Home() {
             <div className="text-2xl font-bold font-mono text-accent-light">
               <AnimatedNumber target={7300000} suffix="+" />
             </div>
-            <div className="text-xs text-muted mt-1">Solved Basins</div>
+            <div className="text-xs text-muted mt-1">Validated Responses</div>
           </div>
           <div>
             <div className="text-2xl font-bold font-mono text-accent-light">8/8</div>
-            <div className="text-xs text-muted mt-1">Control Barriers</div>
+            <div className="text-xs text-muted mt-1">Safety Barriers</div>
           </div>
           <div>
             <div className="text-2xl font-bold font-mono text-accent-light">&lt;1ms</div>
             <div className="text-xs text-muted mt-1">Cache Lookup</div>
           </div>
           <div>
-            <div className="text-2xl font-bold font-mono text-accent-light">
-              <AnimatedNumber target={26} />
-            </div>
-            <div className="text-xs text-muted mt-1">Enforced Pathways</div>
+            <div className="text-2xl font-bold font-mono text-accent-light">5+</div>
+            <div className="text-xs text-muted mt-1">LLM Providers</div>
           </div>
         </div>
       </section>
@@ -342,8 +340,8 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-4">Every message. Enforced.</h2>
           <p className="text-muted text-center mb-12 max-w-xl mx-auto">
-            Your prompt never touches the LLM raw. It passes through thermodynamic
-            physics, 8 control barriers, and a 7.3M-entry knowledge cache first.
+            Your prompt never touches the LLM raw. Every step of the validation
+            process is protected by 8 safety barriers that enforce correctness throughout.
           </p>
           <EnforcementDemo />
         </div>
@@ -359,33 +357,33 @@ export default function Home() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <FeatureCard
               icon={"\u2696\uFE0F"}
-              title="Physics-Based Enforcement"
-              description="Every response follows thermodynamic gradient descent. The math guarantees convergence to truth, not just statistical likelihood."
-              metric={"d\u03C8/dt = -\u03B7\u2207S[\u03C8]"}
+              title="Validated AI Responses"
+              description="Every response passes through our proprietary validation engine. Mathematically guaranteed convergence to accurate answers, not just statistical guessing."
+              metric="Proprietary enforcement engine"
             />
             <FeatureCard
               icon={"\uD83D\uDEE1\uFE0F"}
-              title="8 Control Barriers"
-              description="Truth, naturality, energy, temperature, coherence, error, quality, and synergy. All 8 must pass or the output is blocked."
+              title="8 Safety Barriers"
+              description="Truth, naturality, energy, coherence, and more. All 8 independent safety checks must pass or the output is blocked."
               metric={"ALL SAFE \u2192 EMIT | ANY UNSAFE \u2192 BLOCK"}
             />
             <FeatureCard
               icon={"\u26A1"}
-              title="TEEP Knowledge Cache"
-              description="Once a question is solved, it's solved forever. 7.3M+ pre-solved basins mean most queries return in under 1ms."
-              metric={"O(1) lookup \u00B7 O(N\u2192\u221E) growth"}
+              title="Permanent Knowledge Cache"
+              description="Once a question is validated, the answer is cached forever. Millions of pre-validated responses mean most queries return instantly."
+              metric="Instant cached lookups"
             />
             <FeatureCard
               icon={"\uD83C\uDF10"}
               title="Bring Any LLM"
-              description="Claude, GPT-4o, Gemini, Grok, Llama. Plug in your API key. CPUAGEN enforces the same physics on all of them."
-              metric={"5+ providers \u00B7 13 models"}
+              description="Claude, GPT-4o, Gemini, Grok, Llama. Plug in your API key. CPUAGEN enforces the same validation on all of them."
+              metric={"5+ providers \u00B7 13+ models"}
             />
             <FeatureCard
               icon={"\uD83D\uDCCA"}
               title="Multi-Model Consensus"
-              description="For critical decisions, query multiple LLMs simultaneously and converge on a physics-validated consensus answer."
-              metric="Cross-model basin convergence"
+              description="For critical decisions, query multiple LLMs simultaneously and converge on a validated consensus answer."
+              metric="Cross-model validation"
             />
             <FeatureCard
               icon={"\uD83D\uDEE0\uFE0F"}
@@ -404,7 +402,7 @@ export default function Home() {
             Your device &rarr; Our engine &rarr; Your LLM
           </h2>
           <p className="text-muted text-center mb-12 max-w-xl mx-auto">
-            CPUAGEN sits between you and the model. Nothing gets through without physics validation.
+            CPUAGEN sits between you and the model. Nothing gets through without validation.
           </p>
           <ArchitectureDiagram />
         </div>
@@ -437,8 +435,8 @@ export default function Home() {
               <ul className="space-y-3 text-sm text-muted">
                 {[
                   "8 control barriers block bad output",
-                  "Solved once, cached forever (7.3M+)",
-                  "Physics-validated thermodynamic proof",
+                  "Solved once, cached forever",
+                  "Mathematically validated responses",
                   "Any LLM, same enforcement",
                   "Knowledge compounds across sessions",
                 ].map((t) => (
@@ -478,7 +476,7 @@ export default function Home() {
             <span className="text-xs text-muted ml-2">Physics-Based AI Enforcement</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-muted">
-            <span>Powered by SSD-RCI v10.4</span>
+            <span>Powered by CPUAGEN Engine</span>
             <span>&copy; {new Date().getFullYear()} Wesley Foreman</span>
           </div>
         </div>

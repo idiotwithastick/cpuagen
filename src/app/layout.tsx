@@ -15,14 +15,13 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "CPUAGEN - Physics-Based AI Enforcement",
   description:
-    "The first AI platform where every response is physics-validated, thermodynamically enforced, and permanently cached. Bring your own LLM. We make it honest.",
+    "The first AI platform where every response is validated, safety-enforced, and permanently cached. Bring your own LLM. We make it honest.",
   keywords: [
     "AI enforcement",
-    "physics-based AI",
+    "AI safety",
     "LLM orchestration",
-    "thermodynamic computing",
-    "TEEP",
-    "SSD-RCI",
+    "AI validation",
+    "CPUAGEN",
   ],
   openGraph: {
     title: "CPUAGEN - Physics-Based AI Enforcement",

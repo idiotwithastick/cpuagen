@@ -64,7 +64,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="text-[10px] font-mono text-success">ENGINE LIVE</span>
             </div>
             <div className="text-[10px] text-muted font-mono">
-              7.3M+ TEEPs | 8/8 CBF
+              7.3M+ cached | 8/8 barriers
             </div>
           </div>
           <Link

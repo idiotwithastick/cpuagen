@@ -17,33 +17,25 @@ export interface Message {
   enforcement?: EnforcementResult;
 }
 
-export interface ThermosolveSignature {
+export interface ValidationSignature {
   n: number;
-  S: number;
-  dS: number;
   phi: number;
+  [key: string]: number;
 }
 
-export interface CBFScheme {
+export interface BarrierScheme {
   safe: boolean;
   value: number;
 }
 
-export interface CBFResult {
-  BNR: CBFScheme;
-  BNN: CBFScheme;
-  BNA: CBFScheme;
-  TSE: CBFScheme;
-  PCD: CBFScheme;
-  OGP: CBFScheme;
-  ECM: CBFScheme;
-  SPC: CBFScheme;
+export interface BarrierResult {
+  [key: string]: BarrierScheme | boolean;
   allSafe: boolean;
 }
 
 export interface EnforcementStage {
-  signature: ThermosolveSignature;
-  cbf: CBFResult;
+  signature: ValidationSignature;
+  cbf: BarrierResult;
   teepId?: string;
 }
 

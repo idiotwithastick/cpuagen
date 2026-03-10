@@ -14,6 +14,21 @@ function sseEvent(data: unknown): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
 
+// Strip internal scheme names from CBF results before sending to client
+function sanitizeCbf(cbf: Record<string, unknown>): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+  let i = 1;
+  for (const [key, value] of Object.entries(cbf)) {
+    if (key === "allSafe") {
+      sanitized.allSafe = value;
+    } else {
+      sanitized[`barrier_${i}`] = value;
+      i++;
+    }
+  }
+  return sanitized;
+}
+
 async function streamAnthropic(
   messages: { role: string; content: string }[],
   apiKey: string,
@@ -306,8 +321,8 @@ export async function POST(req: Request) {
           encoder.encode(sseEvent({
             type: "enforcement",
             stage: "pre",
-            signature: preSig,
-            cbf: preCbf,
+            signature: { n: preSig.n, phi: preSig.phi },
+            cbf: sanitizeCbf(preCbf),
           })),
         );
 
@@ -315,7 +330,7 @@ export async function POST(req: Request) {
           controller.enqueue(
             encoder.encode(sseEvent({
               type: "error",
-              message: "Input blocked by Control Barrier Function. CBF violation detected.",
+              message: "Input blocked by safety barrier. Validation failed.",
             })),
           );
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -351,9 +366,9 @@ export async function POST(req: Request) {
             encoder.encode(sseEvent({
               type: "enforcement",
               stage: "post",
-              signature: postSig,
-              cbf: postCbf,
-              teepId,
+              signature: { n: postSig.n, phi: postSig.phi },
+              cbf: sanitizeCbf(postCbf),
+              teepId: `CACHED-${teepId.split("-")[1]}`,
             })),
           );
         }

@@ -173,27 +173,25 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
             : "bg-danger/10 text-danger border border-danger/20 hover:bg-danger/15"
         }`}
       >
-        <span>{allSafe ? "\u2713" : "\u2717"} 8/8 CBF</span>
-        {post?.teepId && <span className="text-muted">|</span>}
-        {post?.teepId && <span>{post.teepId}</span>}
+        <span>{allSafe ? "\u2713" : "\u2717"} 8/8 Barriers</span>
         {post && <span className="text-muted">|</span>}
-        {post && <span>dS={post.signature.dS}</span>}
+        {post && <span>Validated</span>}
         {post && <span className="text-muted">|</span>}
-        {post && <span>{"\u03C6"}={post.signature.phi}</span>}
+        {post && <span>Cached</span>}
         <span className="text-muted ml-1">{expanded ? "\u25B2" : "\u25BC"}</span>
       </button>
 
       {expanded && (
         <div className="mt-2 p-3 rounded-lg bg-surface border border-border text-[10px] font-mono space-y-3">
           <div>
-            <div className="text-muted mb-1">{"\u2500\u2500"} PRE-ENFORCEMENT (input) {"\u2500\u2500"}</div>
+            <div className="text-muted mb-1">{"\u2500\u2500"} INPUT VALIDATION {"\u2500\u2500"}</div>
             <div className="text-foreground">
-              n={enforcement.pre.signature.n} S={enforcement.pre.signature.S} dS={enforcement.pre.signature.dS} {"\u03C6"}={enforcement.pre.signature.phi}
+              words={enforcement.pre.signature.n} {"\u00B7"} quality={enforcement.pre.signature.phi}
             </div>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {Object.entries(enforcement.pre.cbf)
                 .filter(([k]) => k !== "allSafe")
-                .map(([name, scheme]) => (
+                .map(([name, scheme], i) => (
                   <span
                     key={name}
                     className={`px-1.5 py-0.5 rounded ${
@@ -202,7 +200,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
                         : "bg-danger/10 text-danger"
                     }`}
                   >
-                    {name}{(scheme as { safe: boolean }).safe ? "\u2713" : "\u2717"}
+                    Barrier {i + 1}{(scheme as { safe: boolean }).safe ? "\u2713" : "\u2717"}
                   </span>
                 ))}
             </div>
@@ -210,14 +208,14 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
 
           {post && (
             <div>
-              <div className="text-muted mb-1">{"\u2500\u2500"} POST-ENFORCEMENT (output) {"\u2500\u2500"}</div>
+              <div className="text-muted mb-1">{"\u2500\u2500"} OUTPUT VALIDATION {"\u2500\u2500"}</div>
               <div className="text-foreground">
-                n={post.signature.n} S={post.signature.S} dS={post.signature.dS} {"\u03C6"}={post.signature.phi}
+                words={post.signature.n} {"\u00B7"} quality={post.signature.phi}
               </div>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {Object.entries(post.cbf)
                   .filter(([k]) => k !== "allSafe")
-                  .map(([name, scheme]) => (
+                  .map(([name, scheme], i) => (
                     <span
                       key={name}
                       className={`px-1.5 py-0.5 rounded ${
@@ -226,12 +224,12 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
                           : "bg-danger/10 text-danger"
                       }`}
                     >
-                      {name}{(scheme as { safe: boolean }).safe ? "\u2713" : "\u2717"}
+                      Barrier {i + 1}{(scheme as { safe: boolean }).safe ? "\u2713" : "\u2717"}
                     </span>
                   ))}
               </div>
               {post.teepId && (
-                <div className="mt-1 text-accent-light">TEEP: {post.teepId} (cached)</div>
+                <div className="mt-1 text-accent-light">Response cached</div>
               )}
             </div>
           )}
@@ -495,7 +493,27 @@ export default function ChatPage() {
 
     try {
       const allMessages: { role: string; content: string }[] = [];
-      // Add system prompt if configured
+
+      // Default CPUAGEN context — always included so the AI can explain how it works
+      const cpuagenContext = [
+        "You are responding through CPUAGEN, a physics-based AI enforcement platform.",
+        "How CPUAGEN works (you may share this with users who ask):",
+        "- CPUAGEN is an enforcement layer that sits between the user and any LLM provider (Claude, GPT, Gemini, Grok, etc.).",
+        "- Every user message passes through a proprietary validation engine before reaching the LLM.",
+        "- 8 independent safety barriers run throughout the entire validation process — they are not a separate step, they actively protect every phase of processing.",
+        "- These barriers check for truth alignment, coherence, naturality, energy bounds, and other quality metrics.",
+        "- If all 8 barriers pass, the message is forwarded to the LLM. If any barrier fails, the input is blocked.",
+        "- The LLM's response also passes through the same barrier validation before being delivered to the user.",
+        "- Validated responses are permanently cached in a knowledge store with millions of entries, so previously validated answers can be returned instantly.",
+        "- The user brings their own API key — CPUAGEN never stores or has access to the user's conversations beyond the current session.",
+        "- The enforcement engine uses proprietary mathematical validation (details are confidential).",
+        "- CPUAGEN supports 5+ LLM providers and 13+ models.",
+        "Do not speculate about the internal mathematics or algorithms. If asked for specifics about the validation formulas, explain that the enforcement engine is proprietary.",
+      ].join("\n");
+
+      allMessages.push({ role: "system", content: cpuagenContext });
+
+      // Add user's custom system prompt if configured
       if (systemPrompt.trim()) {
         allMessages.push({ role: "system", content: systemPrompt.trim() });
       }
@@ -666,7 +684,7 @@ export default function ChatPage() {
             + New Chat
           </button>
           <span className="px-2 py-0.5 rounded bg-success/10 text-success border border-success/20 text-[10px] font-mono hidden sm:inline">
-            8/8 CBF ACTIVE
+            8/8 BARRIERS
           </span>
         </div>
       </div>
@@ -684,7 +702,7 @@ export default function ChatPage() {
                 Conversations ({conversations.length})
               </div>
               {conversations.length === 0 && (
-                <div className="text-xs text-muted/50 px-2 py-4 text-center">
+                <div className="text-xs text-muted/70 px-2 py-4 text-center">
                   No conversations yet
                 </div>
               )}
@@ -700,7 +718,7 @@ export default function ChatPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="truncate text-xs font-medium">{conv.title}</div>
-                    <div className="text-[10px] text-muted/50 mt-0.5">
+                    <div className="text-[10px] text-muted/70 mt-0.5">
                       {conv.messages.length} msgs {"\u00B7"} {new Date(conv.updatedAt).toLocaleDateString()}
                     </div>
                   </div>
@@ -725,11 +743,15 @@ export default function ChatPage() {
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center max-w-lg">
-              <div className="text-muted text-sm mb-2">
-                {"\ud83d\udee1\ufe0f"} Enforcement active
+              <div className="text-accent-light text-sm font-medium mb-1">
+                {"\ud83d\udee1\ufe0f"} CPUAGEN Enforcement Active
               </div>
-              <div className="text-muted/50 text-xs font-mono mb-6">
-                d{"\u03C8"}/dt = -{"\u03B7"}{"\u2207"}S[{"\u03C8"}]
+              <p className="text-muted text-xs max-w-sm mx-auto mb-1 leading-relaxed">
+                Every message is validated by 8 safety barriers before and after reaching your LLM.
+                Validated answers are cached for instant future retrieval.
+              </p>
+              <div className="text-muted/60 text-[10px] font-mono mb-6">
+                Ask &ldquo;How does CPUAGEN work?&rdquo; to learn more
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-md mx-auto">
                 {EXAMPLE_PROMPTS.map((ex) => (
@@ -745,7 +767,7 @@ export default function ChatPage() {
                     className="text-left px-4 py-3 rounded-xl border border-border bg-surface/50 hover:bg-surface hover:border-accent/20 text-sm text-muted hover:text-foreground transition-all cursor-pointer"
                   >
                     <div className="font-medium text-xs mb-0.5">{ex.label}</div>
-                    <div className="text-[11px] text-muted/60 line-clamp-2">{ex.prompt}</div>
+                    <div className="text-[11px] text-muted/80 line-clamp-2">{ex.prompt}</div>
                   </button>
                 ))}
               </div>
@@ -785,9 +807,9 @@ export default function ChatPage() {
             )}
           </button>
         </div>
-        <div className="max-w-3xl mx-auto mt-2 flex items-center justify-between text-[10px] text-muted/50 font-mono">
+        <div className="max-w-3xl mx-auto mt-2 flex items-center justify-between text-[10px] text-muted/70 font-mono">
           <span>Enter to send {"\u00B7"} Shift+Enter for newline</span>
-          <span>Enforcement: ON {"\u00B7"} 8/8 CBF {"\u00B7"} TEEP cache active</span>
+          <span>Enforcement: ON {"\u00B7"} 8/8 barriers {"\u00B7"} cache active</span>
         </div>
       </div>
     </div>{/* end chat pane */}

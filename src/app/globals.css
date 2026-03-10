@@ -2,14 +2,14 @@
 
 @theme inline {
   --color-background: #050508;
-  --color-foreground: #e4e4e7;
-  --color-muted: #71717a;
-  --color-accent: #6d28d9;
-  --color-accent-light: #8b5cf6;
+  --color-foreground: #ededf0;
+  --color-muted: #9d9da8;
+  --color-accent: #7c3aed;
+  --color-accent-light: #a78bfa;
   --color-accent-glow: #7c3aed;
-  --color-surface: #0c0c12;
-  --color-surface-light: #13131d;
-  --color-border: #1e1e2e;
+  --color-surface: #0e0e16;
+  --color-surface-light: #161622;
+  --color-border: #252538;
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
