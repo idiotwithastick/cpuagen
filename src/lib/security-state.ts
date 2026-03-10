@@ -2,7 +2,7 @@
 // Persists within a serverless function instance lifecycle
 
 interface SecurityEvent {
-  type: "site_auth_fail" | "admin_auth_fail" | "site_lockout" | "admin_lockout" | "admin_login" | "admin_action";
+  type: "site_auth_fail" | "admin_auth_fail" | "site_lockout" | "admin_lockout" | "admin_login" | "admin_action" | "enforcement_pass" | "enforcement_block" | "teep_cached";
   ip: string;
   timestamp: number;
   details?: string;
@@ -140,10 +140,11 @@ export function getLockoutData(): {
   };
 }
 
-export function recordEnforcementRequest(passed: boolean, failedBarriers?: string[]) {
+export function recordEnforcementRequest(passed: boolean, failedBarriers?: string[], ip?: string, stage?: string) {
   state.enforcementStats.totalRequests++;
   if (passed) {
     state.enforcementStats.totalPassed++;
+    addEvent({ type: "enforcement_pass", ip: ip || "unknown", details: `${stage || "check"} — all 8 barriers SAFE` });
   } else {
     state.enforcementStats.totalBlocked++;
     if (failedBarriers) {
@@ -151,12 +152,14 @@ export function recordEnforcementRequest(passed: boolean, failedBarriers?: strin
         state.enforcementStats.barrierFailCounts[b] = (state.enforcementStats.barrierFailCounts[b] || 0) + 1;
       }
     }
+    addEvent({ type: "enforcement_block", ip: ip || "unknown", details: `${stage || "check"} — blocked: ${failedBarriers?.join(", ") || "unknown barriers"}` });
   }
   state.enforcementStats.lastRequestTime = Date.now();
 }
 
-export function recordTeepCached() {
+export function recordTeepCached(teepId?: string, ip?: string) {
   state.enforcementStats.teepsCached++;
+  addEvent({ type: "teep_cached", ip: ip || "unknown", details: teepId ? `TEEP ${teepId} cached` : "TEEP cached" });
 }
 
 export function getEnforcementStats() {

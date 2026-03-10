@@ -1,4 +1,5 @@
 import { thermosolve, cbfCheck, generateTeepId } from "@/lib/enforcement";
+import { recordEnforcementRequest, recordTeepCached } from "@/lib/security-state";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -311,12 +312,23 @@ export async function POST(req: Request) {
   const lastUserMsg = messages.filter((m) => m.role === "user").pop();
   const encoder = new TextEncoder();
 
+  // Extract IP for admin tracking
+  const forwarded = req.headers.get("x-forwarded-for");
+  const requestIp = forwarded ? forwarded.split(",")[0].trim() : req.headers.get("x-real-ip") || "unknown";
+
   const stream = new ReadableStream({
     async start(controller) {
       try {
         // PRE-ENFORCEMENT
         const preSig = thermosolve(lastUserMsg?.content || "");
         const preCbf = cbfCheck(preSig);
+
+        // Record pre-enforcement to admin dashboard
+        const failedPre = Object.entries(preCbf)
+          .filter(([k, v]) => k !== "allSafe" && v !== true)
+          .map(([k]) => k);
+        recordEnforcementRequest(preCbf.allSafe as boolean, failedPre.length > 0 ? failedPre : undefined, requestIp, "PRE-VALIDATION");
+
         controller.enqueue(
           encoder.encode(sseEvent({
             type: "enforcement",
@@ -362,6 +374,14 @@ export async function POST(req: Request) {
           const postSig = thermosolve(fullContent);
           const postCbf = cbfCheck(postSig);
           const teepId = generateTeepId();
+
+          // Record post-enforcement to admin dashboard
+          const failedPost = Object.entries(postCbf)
+            .filter(([k, v]) => k !== "allSafe" && v !== true)
+            .map(([k]) => k);
+          recordEnforcementRequest(postCbf.allSafe as boolean, failedPost.length > 0 ? failedPost : undefined, requestIp, "POST-VALIDATION");
+          recordTeepCached(`CACHED-${teepId.split("-")[1]}`, requestIp);
+
           controller.enqueue(
             encoder.encode(sseEvent({
               type: "enforcement",

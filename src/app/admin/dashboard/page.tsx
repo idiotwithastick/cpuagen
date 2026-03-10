@@ -374,7 +374,10 @@ export default function AdminDashboard() {
                 <div key={i} className="flex items-start gap-3 py-1.5 border-b border-[#1e1e2e] last:border-0">
                   <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
                     event.type.includes("lockout") ? "bg-red-500" :
+                    event.type === "enforcement_block" ? "bg-red-500" :
                     event.type.includes("fail") ? "bg-yellow-500" :
+                    event.type === "enforcement_pass" ? "bg-green-500" :
+                    event.type === "teep_cached" ? "bg-purple-500" :
                     event.type.includes("login") ? "bg-green-500" :
                     "bg-blue-500"
                   }`} />
