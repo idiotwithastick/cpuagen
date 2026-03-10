@@ -1,8 +1,25 @@
-import type { ThermosolveSignature, CBFResult } from "./types";
+// Server-only types — never exposed to client bundle
+interface InternalSignature {
+  n: number;
+  S: number;
+  dS: number;
+  phi: number;
+  [key: string]: number;
+}
+
+interface InternalBarrierScheme {
+  safe: boolean;
+  value: number;
+}
+
+interface InternalBarrierResult {
+  [key: string]: InternalBarrierScheme | boolean;
+  allSafe: boolean;
+}
 
 let teepCounter = Date.now() % 1000000;
 
-export function thermosolve(content: string): ThermosolveSignature {
+export function thermosolve(content: string): InternalSignature {
   const words = content.trim().split(/\s+/).filter(Boolean);
   const n = words.length;
 
@@ -34,7 +51,7 @@ export function thermosolve(content: string): ThermosolveSignature {
   };
 }
 
-export function cbfCheck(sig: ThermosolveSignature): CBFResult {
+export function cbfCheck(sig: InternalSignature): InternalBarrierResult {
   const I_truth = Math.min(1, sig.phi * 1.2);
   const naturality = 0.85;
   const energy = sig.n;
