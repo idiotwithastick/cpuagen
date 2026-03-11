@@ -5,6 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import type { Message, EnforcementResult, Conversation, Settings, ApiKeys, FileAttachment } from "@/lib/types";
 import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS, FILE_LIMITS } from "@/lib/types";
+import type { ConsoleEntry } from "@/components/Canvas";
 
 const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 const Preview = dynamic(() => import("@/components/Preview"), { ssr: false });
@@ -490,6 +491,7 @@ export default function ChatPage() {
   const [canvasCode, setCanvasCode] = useState("");
   const [canvasLang, setCanvasLang] = useState("");
   const [activeTab, setActiveTab] = useState<"canvas" | "preview">("canvas");
+  const [consoleOutput, setConsoleOutput] = useState<ConsoleEntry[]>([]);
   const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -1307,9 +1309,10 @@ export default function ChatPage() {
               onClose={() => setCanvasOpen(false)}
               onSendToChat={handleCanvasInstruction}
               onCodeChange={(code) => setCanvasCode(code)}
+              consoleOutput={consoleOutput}
             />
           ) : (
-            <Preview code={canvasCode} language={canvasLang} />
+            <Preview code={canvasCode} language={canvasLang} onConsoleOutput={(entry) => setConsoleOutput((prev) => [...prev.slice(-199), entry])} />
           )}
         </div>
       </div>

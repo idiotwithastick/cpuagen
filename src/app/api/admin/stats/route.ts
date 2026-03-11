@@ -23,7 +23,8 @@ export async function GET(req: Request) {
   const token = authHeader.slice(7);
   try {
     const decoded = Buffer.from(token, "base64").toString();
-    if (!decoded.startsWith("wforeman:")) {
+    const adminUser = process.env.ADMIN_USER || "wforeman";
+    if (!decoded.startsWith(adminUser + ":")) {
       return Response.json({ error: "Invalid token" }, { status: 401 });
     }
   } catch {

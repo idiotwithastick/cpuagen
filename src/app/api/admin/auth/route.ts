@@ -6,8 +6,8 @@ import {
   isSiteLocked,
 } from "@/lib/security-state";
 
-const ADMIN_USER = "wforeman";
-const ADMIN_PASS = "Hak5@#$586";
+const ADMIN_USER = process.env.ADMIN_USER || "wforeman";
+const ADMIN_PASS = process.env.ADMIN_PASS || "changeme";
 
 function getIp(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");

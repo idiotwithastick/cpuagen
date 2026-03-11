@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const SITE_PASSWORD = "026F3AA3A";
+const SITE_PASSWORD = process.env.SITE_PASSWORD || "026F3AA3A";
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Admin pages bypass site auth (admin has its own auth system)
+  // But add security headers to prevent indexing and clickjacking
   if (pathname.startsWith("/admin")) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
+    response.headers.set("X-Frame-Options", "DENY");
+    response.headers.set("X-Content-Type-Options", "nosniff");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    response.headers.set("Pragma", "no-cache");
+    return response;
   }
 
   // Check for auth cookie — authenticated users pass through
