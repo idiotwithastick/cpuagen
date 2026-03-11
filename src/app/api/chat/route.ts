@@ -10,6 +10,72 @@ interface FileAttachmentPayload {
   dataUrl: string;
 }
 
+// ─── Document text extraction (for providers that don't support native file reading) ───
+
+function isDocxMime(mime: string): boolean {
+  return mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || mime === "application/msword";
+}
+
+function isExcelMime(mime: string): boolean {
+  return mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || mime === "application/vnd.ms-excel";
+}
+
+async function extractPdfText(base64Data: string): Promise<string> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse");
+    const buffer = Buffer.from(base64Data, "base64");
+    const result = await pdfParse(buffer);
+    return result.text || "[PDF: no extractable text found]";
+  } catch {
+    return "[PDF: text extraction failed]";
+  }
+}
+
+async function extractDocxText(base64Data: string): Promise<string> {
+  try {
+    const mammoth = await import("mammoth");
+    const buffer = Buffer.from(base64Data, "base64");
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value || "[DOCX: no extractable text found]";
+  } catch {
+    return "[DOCX: text extraction failed]";
+  }
+}
+
+async function extractExcelText(base64Data: string): Promise<string> {
+  try {
+    const XLSX = await import("xlsx");
+    const buffer = Buffer.from(base64Data, "base64");
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const sheets: string[] = [];
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const csv = XLSX.utils.sheet_to_csv(sheet);
+      sheets.push(`[Sheet: ${sheetName}]\n${csv}`);
+    }
+    return sheets.join("\n\n") || "[Excel: no data found]";
+  } catch {
+    return "[Excel: text extraction failed]";
+  }
+}
+
+async function extractDocumentText(mimeType: string, base64Data: string, fileName: string): Promise<string> {
+  if (isPdfMime(mimeType)) {
+    const text = await extractPdfText(base64Data);
+    return `[File: ${fileName}]\n${text}`;
+  }
+  if (isDocxMime(mimeType)) {
+    const text = await extractDocxText(base64Data);
+    return `[File: ${fileName}]\n${text}`;
+  }
+  if (isExcelMime(mimeType)) {
+    const text = await extractExcelText(base64Data);
+    return `[File: ${fileName}]\n${text}`;
+  }
+  return "";
+}
+
 interface ChatRequest {
   messages: { role: string; content: string }[];
   provider: string;
@@ -52,11 +118,11 @@ function isPdfMime(mime: string): boolean {
 }
 
 // Build multimodal content array for the last user message based on provider
-function buildMultipartContent(
+async function buildMultipartContent(
   text: string,
   attachments: FileAttachmentPayload[],
   provider: string,
-): unknown[] | string {
+): Promise<unknown[] | string> {
   if (!attachments || attachments.length === 0) return text;
 
   if (provider === "anthropic") {
@@ -73,6 +139,10 @@ function buildMultipartContent(
           type: "document",
           source: { type: "base64", media_type: mimeType, data },
         });
+      } else if (isDocxMime(mimeType) || isExcelMime(mimeType)) {
+        // Extract text from Word/Excel for Anthropic (no native support)
+        const extracted = await extractDocumentText(mimeType, data, att.name);
+        parts.push({ type: "text", text: extracted });
       } else {
         // Text/code files — decode base64 to UTF-8
         const decoded = Buffer.from(data, "base64").toString("utf-8");
@@ -95,12 +165,10 @@ function buildMultipartContent(
           type: "image_url",
           image_url: { url: att.dataUrl },
         });
-      } else if (isPdfMime(mimeType)) {
-        // OpenAI/xAI don't support PDF natively — include as text note
-        parts.push({
-          type: "text",
-          text: `[PDF attached: ${att.name} — PDF content cannot be directly processed by this model. Consider using Anthropic or Google for native PDF support.]`,
-        });
+      } else if (isPdfMime(mimeType) || isDocxMime(mimeType) || isExcelMime(mimeType)) {
+        // Extract text from PDFs/Word/Excel for providers without native support
+        const extracted = await extractDocumentText(mimeType, data, att.name);
+        parts.push({ type: "text", text: extracted });
       } else {
         const decoded = Buffer.from(data, "base64").toString("utf-8");
         parts.push({
@@ -115,7 +183,6 @@ function buildMultipartContent(
 
   if (provider === "google") {
     // Google uses a different format — handled in streamGoogle
-    // Return a special marker
     return text;
   }
 
@@ -123,10 +190,10 @@ function buildMultipartContent(
 }
 
 // Build Google-specific parts array including inline data
-function buildGoogleParts(
+async function buildGoogleParts(
   text: string,
   attachments?: FileAttachmentPayload[],
-): unknown[] {
+): Promise<unknown[]> {
   const parts: unknown[] = [];
   if (attachments && attachments.length > 0) {
     for (const att of attachments) {
@@ -135,6 +202,10 @@ function buildGoogleParts(
         parts.push({
           inlineData: { mimeType, data },
         });
+      } else if (isDocxMime(mimeType) || isExcelMime(mimeType)) {
+        // Extract text from Word/Excel for Google (no native support)
+        const extracted = await extractDocumentText(mimeType, data, att.name);
+        parts.push({ text: extracted });
       } else {
         const decoded = Buffer.from(data, "base64").toString("utf-8");
         parts.push({ text: `[File: ${att.name}]\n${decoded}` });
@@ -287,19 +358,19 @@ async function streamGoogle(
   const nonSystemMsgs = messages.filter((m) => m.role !== "system");
   const systemText = systemMsgs.map((m) => m.content as string).join("\n\n");
 
-  const contents = nonSystemMsgs.map((m, idx) => {
+  const contents = await Promise.all(nonSystemMsgs.map(async (m, idx) => {
     const isLastUser = m.role === "user" && idx === nonSystemMsgs.length - 1;
     if (isLastUser && lastUserAttachments && lastUserAttachments.length > 0) {
       return {
         role: "user",
-        parts: buildGoogleParts(m.content as string, lastUserAttachments),
+        parts: await buildGoogleParts(m.content as string, lastUserAttachments),
       };
     }
     return {
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content as string }],
     };
-  });
+  }));
 
   const body: Record<string, unknown> = { contents };
   if (systemText) {
@@ -589,16 +660,16 @@ export async function POST(req: Request) {
           // === JIT SOLVE: Total miss — invoke LLM as physics solver ===
 
           // Build messages with multipart content for attachments
-          const apiMessages: { role: string; content: unknown }[] = messages.map((m, idx) => {
+          const apiMessages: { role: string; content: unknown }[] = await Promise.all(messages.map(async (m, idx) => {
             const isLastUser = m.role === "user" && idx === messages.length - 1;
             if (isLastUser && attachments && attachments.length > 0 && provider !== "google") {
               return {
                 role: m.role,
-                content: buildMultipartContent(m.content, attachments, provider),
+                content: await buildMultipartContent(m.content, attachments, provider),
               };
             }
             return { role: m.role, content: m.content };
-          });
+          }));
 
           // Send AGF miss notification
           controller.enqueue(

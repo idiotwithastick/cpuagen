@@ -24,11 +24,15 @@ export const FILE_LIMITS = {
   allowedMimeTypes: [
     "image/png", "image/jpeg", "image/gif", "image/webp",
     "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+    "application/msword", // .doc
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+    "application/vnd.ms-excel", // .xls
     "text/plain", "text/markdown", "text/csv",
     "text/x-python", "text/javascript", "text/typescript",
     "application/json", "text/xml", "text/html", "text/css",
   ],
-  codeExtensions: /\.(py|js|ts|tsx|jsx|rs|go|java|c|cpp|h|rb|php|sh|bat|yaml|yml|toml|ini|cfg|sql|md|txt|csv|json)$/,
+  codeExtensions: /\.(py|js|ts|tsx|jsx|rs|go|java|c|cpp|h|rb|php|sh|bat|yaml|yml|toml|ini|cfg|sql|md|txt|csv|json|xml|r|m|swift|kt|scala|zig|lua|pl|ex|exs|clj|hs|erl|v|sv|vhd|asm|s|cmake|makefile|dockerfile)$/i,
 } as const;
 
 export interface ApiKeys {

@@ -659,7 +659,8 @@ export default function ChatPage() {
 
       const isAllowedMime = FILE_LIMITS.allowedMimeTypes.includes(file.type as typeof FILE_LIMITS.allowedMimeTypes[number]);
       const isAllowedExt = FILE_LIMITS.codeExtensions.test(file.name);
-      if (!isAllowedMime && !isAllowedExt) continue;
+      const isDocExt = /\.(docx?|xlsx?|pdf|md)$/i.test(file.name);
+      if (!isAllowedMime && !isAllowedExt && !isDocExt) continue;
 
       const reader = new FileReader();
       reader.onload = () => {
@@ -1263,7 +1264,7 @@ export default function ChatPage() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept={FILE_LIMITS.allowedMimeTypes.join(",")}
+            accept={[...FILE_LIMITS.allowedMimeTypes, ".docx", ".doc", ".xlsx", ".xls", ".pdf", ".md", ".py", ".js", ".ts", ".json", ".csv", ".txt"].join(",")}
             onChange={handleFileSelect}
             className="hidden"
           />
