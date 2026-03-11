@@ -240,7 +240,7 @@ export default function SettingsPage() {
               setTestResult(null);
               setSettings((prev) => ({ ...prev, activeModel: e.target.value }));
             }}
-            className="w-full px-4 py-3 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent/40 transition-colors appearance-none cursor-pointer"
+            className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-foreground text-sm focus:outline-none focus:border-accent/40 transition-colors appearance-none cursor-pointer"
           >
             <option value="">Select a model</option>
             {providerConfig?.models.map((m) => (
