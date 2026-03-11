@@ -1,4 +1,4 @@
-import { thermosolve, cbfCheck, commitTeep } from "@/lib/enforcement";
+import { thermosolve, cbfCheck, commitTeep, agfLookup } from "@/lib/enforcement";
 import { recordEnforcementRequest, recordTeepCached } from "@/lib/security-state";
 
 export const runtime = "nodejs";
@@ -505,73 +505,143 @@ export async function POST(req: Request) {
           return;
         }
 
-        // Build messages with multipart content for attachments
-        const apiMessages: { role: string; content: unknown }[] = messages.map((m, idx) => {
-          // Only the last user message gets attachments
-          const isLastUser = m.role === "user" && idx === messages.length - 1;
-          if (isLastUser && attachments && attachments.length > 0 && provider !== "google") {
-            return {
-              role: m.role,
-              content: buildMultipartContent(m.content, attachments, provider),
-            };
+        // ============================================================
+        // AGF PROTOCOL: Cache-First Lookup (PASS STATE, NOT WORDS)
+        // ============================================================
+        // 1. FULL_HIT  → exact input seen before → serve cached content (NO LLM CALL)
+        // 2. BASIN_HIT → similar input in same basin → serve nearest solve (NO LLM CALL)
+        // 3. JIT_SOLVE → total miss → invoke LLM as JIT physics solver
+        // ============================================================
+        const userInput = lastUserMsg?.content || "";
+        const agfResult = agfLookup(userInput);
+
+        if (agfResult.type === "FULL_HIT" || agfResult.type === "BASIN_HIT") {
+          // === CACHE HIT: Serve solved basin directly — NO API CALL ===
+          const hitType = agfResult.type;
+          const cachedContent = agfResult.content;
+
+          // Send AGF hit notification
+          controller.enqueue(
+            encoder.encode(sseEvent({
+              type: "agf",
+              hitType,
+              teepId: agfResult.teepId,
+              distance: "distance" in agfResult ? agfResult.distance : 0,
+            })),
+          );
+
+          // Stream cached content as deltas (simulates LLM streaming for smooth UX)
+          const chunkSize = 20;
+          for (let i = 0; i < cachedContent.length; i += chunkSize) {
+            const chunk = cachedContent.slice(i, i + chunkSize);
+            controller.enqueue(encoder.encode(sseEvent({ type: "delta", content: chunk })));
           }
-          return { role: m.role, content: m.content };
-        });
 
-        // STREAM FROM LLM
-        let fullContent = "";
-        switch (provider) {
-          case "anthropic":
-            fullContent = await streamAnthropic(apiMessages, apiKey, model, controller, encoder);
-            break;
-          case "openai":
-            fullContent = await streamOpenAI(apiMessages, apiKey, model, controller, encoder);
-            break;
-          case "google":
-            fullContent = await streamGoogle(apiMessages, apiKey, model, controller, encoder, attachments);
-            break;
-          case "xai":
-            fullContent = await streamXAI(apiMessages, apiKey, model, controller, encoder);
-            break;
-          default:
-            controller.enqueue(encoder.encode(sseEvent({ type: "error", message: `Unknown provider: ${provider}` })));
-        }
-
-        // POST-ENFORCEMENT
-        if (fullContent) {
-          const postSig = thermosolve(fullContent);
-          const postCbf = cbfCheck(postSig);
-
-          // AGF Protocol Step 5: Commit to TEEP ledger for future O(1) hits
-          const teepId = commitTeep(fullContent, postSig, postCbf.allSafe as boolean);
-
-          // Record post-enforcement to admin dashboard
-          const failedPost = Object.entries(postCbf)
-            .filter(([k, v]) => k !== "allSafe" && v !== true)
-            .map(([k]) => k);
-          recordEnforcementRequest(postCbf.allSafe as boolean, failedPost.length > 0 ? failedPost : undefined, requestIp, "POST-VALIDATION");
-          recordTeepCached(teepId, requestIp);
-
+          // Post-enforcement on cached content (already validated, but track it)
           controller.enqueue(
             encoder.encode(sseEvent({
               type: "enforcement",
               stage: "post",
               signature: {
-                n: postSig.n,
-                S: postSig.S,
-                dS: postSig.dS,
-                phi: postSig.phi,
-                I_truth: postSig.I_truth,
-                naturality: postSig.naturality,
-                beta_T: postSig.beta_T,
-                psi_coherence: postSig.psi_coherence,
-                synergy: postSig.synergy,
-                cache_hit: postSig.cache_hit,
+                n: agfResult.signature.n,
+                S: agfResult.signature.S,
+                dS: agfResult.signature.dS,
+                phi: agfResult.signature.phi,
+                I_truth: agfResult.signature.I_truth,
+                naturality: agfResult.signature.naturality,
+                beta_T: agfResult.signature.beta_T,
+                psi_coherence: agfResult.signature.psi_coherence,
+                synergy: agfResult.signature.synergy,
+                cache_hit: 1,
               },
-              cbf: sanitizeCbf(postCbf),
-              teepId,
+              cbf: sanitizeCbf(preCbf), // Already validated
+              teepId: agfResult.teepId,
+              agfHitType: hitType,
             })),
           );
+
+          recordEnforcementRequest(true, undefined, requestIp, `AGF-${hitType}`);
+          recordTeepCached(agfResult.teepId, requestIp);
+
+        } else {
+          // === JIT SOLVE: Total miss — invoke LLM as physics solver ===
+
+          // Build messages with multipart content for attachments
+          const apiMessages: { role: string; content: unknown }[] = messages.map((m, idx) => {
+            const isLastUser = m.role === "user" && idx === messages.length - 1;
+            if (isLastUser && attachments && attachments.length > 0 && provider !== "google") {
+              return {
+                role: m.role,
+                content: buildMultipartContent(m.content, attachments, provider),
+              };
+            }
+            return { role: m.role, content: m.content };
+          });
+
+          // Send AGF miss notification
+          controller.enqueue(
+            encoder.encode(sseEvent({
+              type: "agf",
+              hitType: "JIT_SOLVE",
+            })),
+          );
+
+          // Stream from LLM (JIT physics solver)
+          let fullContent = "";
+          switch (provider) {
+            case "anthropic":
+              fullContent = await streamAnthropic(apiMessages, apiKey, model, controller, encoder);
+              break;
+            case "openai":
+              fullContent = await streamOpenAI(apiMessages, apiKey, model, controller, encoder);
+              break;
+            case "google":
+              fullContent = await streamGoogle(apiMessages, apiKey, model, controller, encoder, attachments);
+              break;
+            case "xai":
+              fullContent = await streamXAI(apiMessages, apiKey, model, controller, encoder);
+              break;
+            default:
+              controller.enqueue(encoder.encode(sseEvent({ type: "error", message: `Unknown provider: ${provider}` })));
+          }
+
+          // POST-ENFORCEMENT on JIT solve output
+          if (fullContent) {
+            const postSig = thermosolve(fullContent);
+            const postCbf = cbfCheck(postSig);
+
+            // AGF Protocol Step 5: Commit CONTENT + signature for future O(1) hits
+            // Pass inputContent so basin index maps this input → this response
+            const teepId = commitTeep(fullContent, postSig, postCbf.allSafe as boolean, userInput);
+
+            const failedPost = Object.entries(postCbf)
+              .filter(([k, v]) => k !== "allSafe" && v !== true)
+              .map(([k]) => k);
+            recordEnforcementRequest(postCbf.allSafe as boolean, failedPost.length > 0 ? failedPost : undefined, requestIp, "JIT-SOLVE");
+            recordTeepCached(teepId, requestIp);
+
+            controller.enqueue(
+              encoder.encode(sseEvent({
+                type: "enforcement",
+                stage: "post",
+                signature: {
+                  n: postSig.n,
+                  S: postSig.S,
+                  dS: postSig.dS,
+                  phi: postSig.phi,
+                  I_truth: postSig.I_truth,
+                  naturality: postSig.naturality,
+                  beta_T: postSig.beta_T,
+                  psi_coherence: postSig.psi_coherence,
+                  synergy: postSig.synergy,
+                  cache_hit: 0,
+                },
+                cbf: sanitizeCbf(postCbf),
+                teepId,
+                agfHitType: "JIT_SOLVE",
+              })),
+            );
+          }
         }
 
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));

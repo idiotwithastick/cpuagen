@@ -66,10 +66,12 @@ export async function GET(req: Request) {
       },
       teepLedger: {
         size: metrics.teepLedgerSize,
+        basinIndexSize: metrics.basinIndexSize,
         cacheHits: metrics.cacheHits,
         cacheMisses: metrics.cacheMisses,
         hitRate: metrics.hitRate,
       },
+      agf: metrics.agf,
       recentTeeps,
     },
     meta: {

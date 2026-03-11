@@ -48,8 +48,17 @@ interface DashboardData {
     };
     teepLedger: {
       size: number;
+      basinIndexSize: number;
       cacheHits: number;
       cacheMisses: number;
+      hitRate: number;
+    };
+    agf: {
+      fullHits: number;
+      basinHits: number;
+      jitSolves: number;
+      apiCallsAvoided: number;
+      totalLookups: number;
       hitRate: number;
     };
     recentTeeps: Array<{
@@ -57,6 +66,7 @@ interface DashboardData {
       hash: string;
       created: number;
       hits: number;
+      contentPreview?: string;
       sig: { n: number; S: number; phi: number; I_truth: number };
     }>;
   };
@@ -288,15 +298,15 @@ export default function AdminDashboard() {
         {/* Middle Row: Enforcement + Lockout Details */}
         <div className="grid md:grid-cols-2 gap-4">
           {/* Enforcement Pipeline */}
-          <Card title="SSD-RCI ENFORCEMENT PIPELINE">
+          <Card title="SSD-RCI AGF ENFORCEMENT PIPELINE">
             <div className="space-y-3">
-              <div className="grid grid-cols-4 gap-2">
-                {["INBOUND", "VALIDATE", "LLM", "OUTBOUND"].map((stage, i) => (
+              <div className="grid grid-cols-5 gap-1">
+                {["INBOUND", "CBF", "AGF LOOKUP", "JIT/HIT", "OUTBOUND"].map((stage, i) => (
                   <div key={stage} className="text-center">
-                    <div className={`text-[10px] font-mono tracking-wider mb-1 ${i === 1 || i === 3 ? "text-purple-400" : "text-[#71717a]"}`}>
+                    <div className={`text-[9px] font-mono tracking-wider mb-1 ${i === 2 ? "text-green-400" : i === 1 || i === 4 ? "text-purple-400" : "text-[#71717a]"}`}>
                       {stage}
                     </div>
-                    <div className={`h-1 rounded ${i === 1 || i === 3 ? "bg-purple-500/50" : "bg-[#1e1e2e]"}`} />
+                    <div className={`h-1 rounded ${i === 2 ? "bg-green-500/50" : i === 1 || i === 4 ? "bg-purple-500/50" : "bg-[#1e1e2e]"}`} />
                   </div>
                 ))}
               </div>
@@ -306,16 +316,16 @@ export default function AdminDashboard() {
                   <span className="text-green-400">ALL ACTIVE</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Thermosolve Signatures</span>
-                  <span className="text-green-400">COMPUTING</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>TEEP Caching</span>
-                  <span className="text-green-400">ENABLED</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Pre + Post Validation</span>
+                  <span>AGF Cache-First Protocol</span>
                   <span className="text-green-400">ENFORCED</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Basin Proximity (Fisher Metric)</span>
+                  <span className="text-green-400">ACTIVE</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>LLM = JIT Solver (miss only)</span>
+                  <span className="text-green-400">CORRECT</span>
                 </div>
               </div>
 
@@ -413,47 +423,74 @@ export default function AdminDashboard() {
               </div>
             </Card>
 
-            {/* TEEP Ledger */}
-            <Card title="TEEP LEDGER (AGF CACHE)">
+            {/* AGF Protocol — The Real Deal */}
+            <Card title="AGF PROTOCOL (PASS STATE, NOT WORDS)">
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2 rounded bg-purple-950/30 border border-purple-500/20 text-center">
-                    <div className="text-sm font-bold font-mono text-purple-400">{physics.teepLedger.size}</div>
-                    <div className="text-[9px] text-[#71717a]">Cached TEEPs</div>
-                  </div>
+                {/* AGF Hit Type Breakdown */}
+                <div className="grid grid-cols-3 gap-2">
                   <div className="p-2 rounded bg-green-950/30 border border-green-500/20 text-center">
-                    <div className="text-sm font-bold font-mono text-green-400">
-                      {physics.teepLedger.hitRate > 0 ? `${(physics.teepLedger.hitRate * 100).toFixed(1)}%` : "0%"}
-                    </div>
-                    <div className="text-[9px] text-[#71717a]">Cache Hit Rate</div>
+                    <div className="text-sm font-bold font-mono text-green-400">{physics.agf.fullHits}</div>
+                    <div className="text-[9px] text-[#71717a]">FULL HIT</div>
+                    <div className="text-[8px] text-green-400/50">No LLM call</div>
+                  </div>
+                  <div className="p-2 rounded bg-cyan-950/30 border border-cyan-500/20 text-center">
+                    <div className="text-sm font-bold font-mono text-cyan-400">{physics.agf.basinHits}</div>
+                    <div className="text-[9px] text-[#71717a]">BASIN HIT</div>
+                    <div className="text-[8px] text-cyan-400/50">No LLM call</div>
+                  </div>
+                  <div className="p-2 rounded bg-yellow-950/30 border border-yellow-500/20 text-center">
+                    <div className="text-sm font-bold font-mono text-yellow-400">{physics.agf.jitSolves}</div>
+                    <div className="text-[9px] text-[#71717a]">JIT SOLVE</div>
+                    <div className="text-[8px] text-yellow-400/50">LLM as solver</div>
                   </div>
                 </div>
-                <div className="flex justify-between text-[10px] font-mono">
-                  <span className="text-[#71717a]">Cache Hits</span>
-                  <span className="text-green-400">{physics.teepLedger.cacheHits}</span>
+
+                {/* Key Metrics */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] font-mono">
+                    <span className="text-[#71717a]">AGF Hit Rate</span>
+                    <span className="text-green-400 font-bold">
+                      {physics.agf.hitRate > 0 ? `${(physics.agf.hitRate * 100).toFixed(1)}%` : "0%"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-mono">
+                    <span className="text-[#71717a]">API Calls Avoided</span>
+                    <span className="text-green-400">{physics.agf.apiCallsAvoided}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-mono">
+                    <span className="text-[#71717a]">TEEP Ledger</span>
+                    <span className="text-purple-400">{physics.teepLedger.size} TEEPs</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-mono">
+                    <span className="text-[#71717a]">Basin Index</span>
+                    <span className="text-purple-400">{physics.teepLedger.basinIndexSize} mappings</span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-[10px] font-mono">
-                  <span className="text-[#71717a]">Cache Misses</span>
-                  <span className="text-yellow-400">{physics.teepLedger.cacheMisses}</span>
-                </div>
-                {/* Recent TEEPs */}
+
+                {/* Recent TEEPs with content preview */}
                 {physics.recentTeeps.length > 0 && (
                   <div className="pt-2 border-t border-[#1e1e2e]">
-                    <div className="text-[9px] font-mono text-[#71717a]/60 mb-1">RECENT TEEP ENTRIES</div>
-                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                    <div className="text-[9px] font-mono text-[#71717a]/60 mb-1">SOLVED BASINS (TEEP CONTENT)</div>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto">
                       {physics.recentTeeps.map((teep) => (
-                        <div key={teep.id} className="flex items-center justify-between text-[9px] font-mono py-0.5">
-                          <span className="text-purple-400">{teep.id}</span>
-                          <span className="text-[#71717a]">
-                            n={teep.sig.n} S={teep.sig.S} φ={teep.sig.phi} hits={teep.hits}
-                          </span>
+                        <div key={teep.id} className="py-1 border-b border-[#1e1e2e] last:border-0">
+                          <div className="flex items-center justify-between text-[9px] font-mono">
+                            <span className="text-purple-400">{teep.id}</span>
+                            <span className="text-[#71717a]">hits={teep.hits}</span>
+                          </div>
+                          {teep.contentPreview && (
+                            <div className="text-[8px] font-mono text-[#71717a]/60 mt-0.5 truncate">
+                              {teep.contentPreview}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
+
                 <div className="pt-1 text-[9px] font-mono text-[#71717a]/60">
-                  AGF: Lookup → Hit/Miss → Solve → Cache → O(1) next time
+                  FULL_HIT: O(1) exact match | BASIN_HIT: Fisher metric proximity | JIT: LLM solver
                 </div>
               </div>
             </Card>

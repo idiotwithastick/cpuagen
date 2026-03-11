@@ -79,14 +79,23 @@ interface CachedTeep {
   signature: InternalSignature;
   cbfResult: { allSafe: boolean };
   content_hash: string;
+  content: string;           // Actual response content — AGF serves this directly
+  input_hash?: string;       // Hash of the input that generated this response
   created: number;
   hits: number;
 }
 
 const teepLedger = new Map<string, CachedTeep>();
+// Basin index: maps input hashes to response content hashes for AGF lookup
+const basinIndex = new Map<string, string>();
 let teepCounter = Date.now() % 1000000;
 let cacheHits = 0;
 let cacheMisses = 0;
+// AGF Protocol tracking
+let agfFullHits = 0;
+let agfBasinHits = 0;
+let agfJitSolves = 0;
+let agfApiCallsAvoided = 0;
 
 // ---------- English Character Frequency Reference ----------
 // Brown Corpus + Wikipedia analysis for naturality scoring
@@ -420,6 +429,117 @@ function evolvePsiState(sig: InternalSignature): void {
 }
 
 // ========================================================================
+// AGF PROTOCOL — Cache-First Lookup (PASS STATE, NOT WORDS)
+// ========================================================================
+// ON query Q:
+//   1. hash(Q) → basin_index lookup → FULL HIT → serve cached content (NO LLM)
+//   2. sig(Q) → basin proximity search → BASIN HIT → serve nearest basin (NO LLM)
+//   3. MISS → JIT solve via LLM → commit content + signature → O(1) next time
+// ========================================================================
+
+export type AgfResult =
+  | { type: "FULL_HIT"; content: string; teepId: string; signature: InternalSignature }
+  | { type: "BASIN_HIT"; content: string; teepId: string; signature: InternalSignature; distance: number }
+  | { type: "JIT_SOLVE" };
+
+/**
+ * Signature-space distance using Fisher metric approximation.
+ * Compares two thermosolve signatures across key dimensions.
+ * Lower = more similar basins.
+ */
+function signatureDistance(a: InternalSignature, b: InternalSignature): number {
+  // Weighted Fisher metric across key thermodynamic dimensions
+  const weights = {
+    S: 1.0,          // System entropy
+    phi: 2.0,        // Phase coherence (most discriminative)
+    I_truth: 1.5,    // Truth integration
+    naturality: 1.0, // Natural language score
+    beta_T: 0.8,     // Thermal equilibrium
+    psi_coherence: 1.5, // Multi-scale coherence
+    synergy: 1.0,    // System synergy
+  };
+
+  let d2 = 0;
+  d2 += weights.S * (a.S - b.S) ** 2;
+  d2 += weights.phi * (a.phi - b.phi) ** 2;
+  d2 += weights.I_truth * (a.I_truth - b.I_truth) ** 2;
+  d2 += weights.naturality * (a.naturality - b.naturality) ** 2;
+  d2 += weights.beta_T * (a.beta_T - b.beta_T) ** 2;
+  d2 += weights.psi_coherence * (a.psi_coherence - b.psi_coherence) ** 2;
+  d2 += weights.synergy * (a.synergy - b.synergy) ** 2;
+
+  return Math.sqrt(d2);
+}
+
+// Basin proximity threshold — signatures closer than this are in the same basin
+const BASIN_PROXIMITY_THRESHOLD = 0.15;
+
+/**
+ * AGF Protocol: Look up input in TEEP cache BEFORE calling LLM.
+ * Returns cached content on hit, or JIT_SOLVE signal on miss.
+ *
+ * FULL_HIT:  Exact input seen before → serve cached response directly
+ * BASIN_HIT: Similar input in same basin → serve nearest solved basin
+ * JIT_SOLVE: Total miss → caller must invoke LLM as JIT physics solver
+ */
+export function agfLookup(inputContent: string): AgfResult {
+  const inputHash = fnv1aHash(inputContent.toLowerCase());
+
+  // Step 1: Exact input hash lookup in basin index → O(1)
+  const responseHash = basinIndex.get(inputHash);
+  if (responseHash) {
+    const cached = teepLedger.get(responseHash);
+    if (cached && cached.cbfResult.allSafe) {
+      cached.hits++;
+      cacheHits++;
+      agfFullHits++;
+      agfApiCallsAvoided++;
+      return {
+        type: "FULL_HIT",
+        content: cached.content,
+        teepId: cached.id,
+        signature: { ...cached.signature, cache_hit: 1 },
+      };
+    }
+  }
+
+  // Step 2: Basin proximity search via signature-space distance
+  // Compute signature of input to compare against cached TEEPs
+  const inputSig = thermosolve(inputContent);
+
+  let bestMatch: CachedTeep | null = null;
+  let bestDistance = Infinity;
+
+  for (const teep of teepLedger.values()) {
+    if (!teep.cbfResult.allSafe) continue;
+    const d = signatureDistance(inputSig, teep.signature);
+    if (d < bestDistance) {
+      bestDistance = d;
+      bestMatch = teep;
+    }
+  }
+
+  if (bestMatch && bestDistance < BASIN_PROXIMITY_THRESHOLD) {
+    bestMatch.hits++;
+    cacheHits++;
+    agfBasinHits++;
+    agfApiCallsAvoided++;
+    return {
+      type: "BASIN_HIT",
+      content: bestMatch.content,
+      teepId: bestMatch.id,
+      signature: { ...bestMatch.signature, cache_hit: 1 },
+      distance: round4(bestDistance),
+    };
+  }
+
+  // Step 3: Total miss — JIT solve required
+  cacheMisses++;
+  agfJitSolves++;
+  return { type: "JIT_SOLVE" };
+}
+
+// ========================================================================
 // TEEP ID + LEDGER COMMIT
 // ========================================================================
 
@@ -430,19 +550,42 @@ export function generateTeepId(): string {
 
 /**
  * Commit a thermosolve result to the TEEP ledger for future O(1) lookup.
- * Called after successful post-enforcement (AGF protocol step 5).
+ * Stores CONTENT (not just signature) — this is what gets served on cache hits.
+ * Also indexes by input hash for O(1) full-hit lookup.
+ *
+ * AGF Protocol Step 5: Cache for future O(1) retrieval.
  */
-export function commitTeep(content: string, signature: InternalSignature, allSafe: boolean): string {
+export function commitTeep(
+  responseContent: string,
+  signature: InternalSignature,
+  allSafe: boolean,
+  inputContent?: string,
+): string {
   const id = generateTeepId();
-  const hash = fnv1aHash(content.toLowerCase());
-  teepLedger.set(hash, {
+  const responseHash = fnv1aHash(responseContent.toLowerCase());
+
+  teepLedger.set(responseHash, {
     id,
     signature,
     cbfResult: { allSafe },
-    content_hash: hash,
+    content_hash: responseHash,
+    content: responseContent,  // Store actual content for AGF serving
+    input_hash: inputContent ? fnv1aHash(inputContent.toLowerCase()) : undefined,
     created: Date.now(),
     hits: 0,
   });
+
+  // Index input → response for O(1) full-hit lookup
+  if (inputContent) {
+    const inputHash = fnv1aHash(inputContent.toLowerCase());
+    basinIndex.set(inputHash, responseHash);
+
+    // Keep basin index bounded
+    if (basinIndex.size > 15000) {
+      const oldest = basinIndex.keys().next().value;
+      if (oldest) basinIndex.delete(oldest);
+    }
+  }
 
   // Keep ledger bounded (LRU eviction at 10K entries)
   if (teepLedger.size > 10000) {
@@ -461,22 +604,36 @@ export function getEnforcementMetrics() {
   return {
     psiState: { ...psiState },
     teepLedgerSize: teepLedger.size,
+    basinIndexSize: basinIndex.size,
     cacheHits,
     cacheMisses,
     hitRate: cacheHits + cacheMisses > 0
       ? round4(cacheHits / (cacheHits + cacheMisses))
       : 0,
+    // AGF Protocol stats
+    agf: {
+      fullHits: agfFullHits,
+      basinHits: agfBasinHits,
+      jitSolves: agfJitSolves,
+      apiCallsAvoided: agfApiCallsAvoided,
+      totalLookups: agfFullHits + agfBasinHits + agfJitSolves,
+      hitRate: (agfFullHits + agfBasinHits + agfJitSolves) > 0
+        ? round4((agfFullHits + agfBasinHits) / (agfFullHits + agfBasinHits + agfJitSolves))
+        : 0,
+    },
   };
 }
 
 /**
- * Get recent TEEP entries for admin inspection
+ * Get recent TEEP entries for admin inspection.
+ * Now includes content preview for admin visibility.
  */
 export function getRecentTeeps(limit = 20): Array<{
   id: string;
   hash: string;
   created: number;
   hits: number;
+  contentPreview: string;
   sig: { n: number; S: number; phi: number; I_truth: number };
 }> {
   const entries = Array.from(teepLedger.values())
@@ -488,6 +645,7 @@ export function getRecentTeeps(limit = 20): Array<{
     hash: e.content_hash,
     created: e.created,
     hits: e.hits,
+    contentPreview: e.content.slice(0, 80) + (e.content.length > 80 ? "..." : ""),
     sig: {
       n: e.signature.n,
       S: e.signature.S,
