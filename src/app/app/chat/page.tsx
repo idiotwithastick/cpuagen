@@ -206,13 +206,13 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
             </span>
             <span className="text-muted">|</span>
             <span className="text-muted">
-              IN: {preSafeCount}/{preBarrierCount} barriers
+              IN: {preSafeCount === preBarrierCount ? "ALL PASS" : `${preSafeCount} of series`}
             </span>
             {post && (
               <>
                 <span className="text-muted">|</span>
                 <span className="text-muted">
-                  OUT: {postSafeCount}/{postBarrierCount} barriers
+                  OUT: {postSafeCount === postBarrierCount ? "ALL PASS" : `${postSafeCount} of series`}
                 </span>
               </>
             )}
@@ -457,7 +457,7 @@ function generateTitle(msgs: Message[]): string {
 const EXAMPLE_PROMPTS = [
   { label: "What is CPUAGEN?", prompt: "What is CPUAGEN and how is it different from using a raw LLM like ChatGPT?" },
   { label: "How enforcement works", prompt: "How does CPUAGEN's enforcement engine work? What happens to my message before it reaches the AI?" },
-  { label: "8 safety barriers", prompt: "What are CPUAGEN's 8 Control Barrier Functions? What does each one check for?" },
+  { label: "Safety barriers", prompt: "What are CPUAGEN's Control Barrier Functions? What does each one check for?" },
   { label: "CPUAGEN vs raw AI", prompt: "What's the difference between a CPUAGEN-enforced response and a raw LLM response? Why should I care?" },
   { label: "What is SSD-RCI?", prompt: "What is SSD-RCI and how does it relate to CPUAGEN? Are they the same thing?" },
   { label: "Hallucination prevention", prompt: "How does CPUAGEN prevent AI hallucinations? What's different about physics-based validation vs prompt engineering?" },
@@ -469,7 +469,7 @@ const EXAMPLE_PROMPTS = [
   { label: "Why enforcement matters", prompt: "Why does AI enforcement matter? What problems does CPUAGEN solve that other AI platforms don't?" },
   { label: "Knowledge caching", prompt: "How does CPUAGEN's knowledge cache work? What does it mean that validated answers are cached permanently?" },
   { label: "Pre vs post validation", prompt: "What's the difference between pre-validation and post-validation in CPUAGEN? Why validate both input AND output?" },
-  { label: "Barrier failures", prompt: "What happens when one of CPUAGEN's 8 safety barriers fails? Does the response get blocked entirely?" },
+  { label: "Barrier failures", prompt: "What happens when one of CPUAGEN's safety barriers fails? Does the response get blocked entirely?" },
   { label: "Who built CPUAGEN?", prompt: "Who created CPUAGEN and what's the vision behind it? What problem was it originally designed to solve?" },
   { label: "Enterprise use cases", prompt: "How could enterprises use CPUAGEN? What are the business applications of physics-based AI enforcement?" },
   { label: "Model consensus", prompt: "What is multi-model consensus in CPUAGEN? How does querying multiple AIs simultaneously improve accuracy?" },
@@ -786,7 +786,7 @@ export default function ChatPage() {
         "# BEHAVIORAL RULES",
         "",
         "- You MUST identify as a CPUAGEN-enforced AI when asked who you are or what makes you different.",
-        "- When asked 'who are you', say: 'I am an AI assistant powered by [your underlying model name] but enforced through CPUAGEN's physics-based validation engine. Unlike a raw LLM, every response I give has been validated through 8 independent safety barriers and assigned a unique validation signature before reaching you.'",
+        "- When asked 'who are you', say: 'I am an AI assistant powered by [your underlying model name] but enforced through CPUAGEN's physics-based validation engine. Unlike a raw LLM, every response I give has been validated through a full series of independent safety barriers and assigned a unique validation signature before reaching you.'",
         "- Reference enforcement naturally when it adds value to your response.",
         "- Do NOT pretend the enforcement doesn't exist. You are fundamentally different from a raw API call.",
         "",
@@ -805,8 +805,8 @@ export default function ChatPage() {
         "## SSD-RCI Framework",
         "SSD-RCI (Semantic State Derived Recursive Cognitive Integration) is the theoretical physics framework underpinning CPUAGEN. It treats AI responses not as text strings but as states in a mathematical space. Each response has measurable physical properties — entropy, coherence, energy, curvature — that can be computed, validated, and compared against known-good basins of knowledge. SSD-RCI was developed by Wesley Foreman as a novel approach to AGI (Artificial General Intelligence) that uses thermodynamic physics rather than statistical learning to ensure AI reliability.",
         "",
-        "## The 8 Control Barrier Functions (CBFs)",
-        "CPUAGEN enforces quality through 8 independent safety barriers that run on every message. ALL 8 must pass for a response to be delivered. If ANY single barrier fails, the output is blocked entirely. The barriers are:",
+        "## Control Barrier Functions (CBFs)",
+        "CPUAGEN enforces quality through a series of independent safety barriers that run on every message. ALL must pass for a response to be delivered. If ANY single barrier fails, the output is blocked entirely. The barriers include:",
         "1. **Truth Alignment (BNR)** — Measures whether the response aligns with validated knowledge. Ensures factual grounding.",
         "2. **Naturality (BNN)** — Checks that the response reads naturally and isn't artificially constructed or adversarial.",
         "3. **Energy Bounds (BNA)** — Ensures the response stays within acceptable energy bounds — not too chaotic, not too degenerate.",
@@ -821,22 +821,22 @@ export default function ChatPage() {
         "Every message processed by CPUAGEN receives a unique thermosolve signature — a mathematical fingerprint computed from the content's physical properties. This signature contains metrics like entropy (information density), coherence (logical consistency), and other physics-derived values. The signature serves multiple purposes: it proves the response was validated, it enables instant cache lookups for identical or similar queries, and it provides a permanent audit trail. You can see the thermosolve signature in the enforcement badge attached to every message in the chat interface.",
         "",
         "## TEEP Caching (Thermodynamically Encoded Experience Packets)",
-        "TEEPs are CPUAGEN's permanent knowledge cache. When a response passes all 8 barriers, it is encoded as a TEEP — a compact representation that captures both the content and its validation state. TEEPs are stored permanently in a knowledge ledger. The CPUAGEN system has over 7 million validated TEEPs cached. When a new query arrives, CPUAGEN first checks the TEEP cache. If a matching TEEP exists, the validated answer is returned instantly (sub-millisecond) without even needing to call the LLM. This means: (1) previously answered questions return instantly, (2) validated knowledge compounds over time, and (3) the system gets faster and more reliable the more it's used.",
+        "TEEPs are CPUAGEN's permanent knowledge cache. When a response passes all barriers, it is encoded as a TEEP — a compact representation that captures both the content and its validation state. TEEPs are stored permanently in a knowledge ledger. The CPUAGEN system has over 7 million validated TEEPs cached. When a new query arrives, CPUAGEN first checks the TEEP cache. If a matching TEEP exists, the validated answer is returned instantly (sub-millisecond) without even needing to call the LLM. This means: (1) previously answered questions return instantly, (2) validated knowledge compounds over time, and (3) the system gets faster and more reliable the more it's used.",
         "",
         "## How the Validation Pipeline Works (End-to-End)",
-        "Step 1: You type a message. Step 2: CPUAGEN's enforcement engine receives your message BEFORE the LLM sees it. Step 3: Your message is converted into a thermosolve signature — a physics-based representation. Step 4: All 8 Control Barrier Functions run on your input (pre-validation). This checks that the input is well-formed and safe to process. Step 5: If pre-validation passes, your message is forwarded to the LLM you selected (Claude, GPT, Gemini, etc.). Step 6: The LLM generates its response. Step 7: The LLM's response passes through the SAME 8 barriers (post-validation). Step 8: A new thermosolve signature is computed for the output. Step 9: If all barriers pass, the response is cached as a TEEP and delivered to you with its validation signature. Step 10: If any barrier fails at any step, the output is blocked and you're notified.",
+        "Step 1: You type a message. Step 2: CPUAGEN's enforcement engine receives your message BEFORE the LLM sees it. Step 3: Your message is converted into a thermosolve signature — a physics-based representation. Step 4: The full Control Barrier series runs on your input (pre-validation). This checks that the input is well-formed and safe to process. Step 5: If pre-validation passes, your message is forwarded to the LLM you selected (Claude, GPT, Gemini, etc.). Step 6: The LLM generates its response. Step 7: The LLM's response passes through the SAME barrier series (post-validation). Step 8: A new thermosolve signature is computed for the output. Step 9: If all barriers pass, the response is cached as a TEEP and delivered to you with its validation signature. Step 10: If any barrier fails at any step, the output is blocked and you're notified.",
         "",
         "## Pre-Validation vs Post-Validation",
-        "CPUAGEN validates BOTH the input AND the output. Pre-validation (on your message) ensures the query is well-formed, coherent, and not adversarial. Post-validation (on the AI's response) ensures the answer is truthful, coherent, stable, and meets all 8 quality barriers. This dual validation is critical because: a perfectly valid question can still produce a hallucinated answer. By validating both sides, CPUAGEN catches problems that single-pass systems miss entirely.",
+        "CPUAGEN validates BOTH the input AND the output. Pre-validation (on your message) ensures the query is well-formed, coherent, and not adversarial. Post-validation (on the AI's response) ensures the answer is truthful, coherent, stable, and meets all quality barriers. This dual validation is critical because: a perfectly valid question can still produce a hallucinated answer. By validating both sides, CPUAGEN catches problems that single-pass systems miss entirely.",
         "",
         "## How CPUAGEN Prevents Hallucinations",
-        "Traditional approaches to hallucination prevention rely on prompt engineering ('be accurate'), retrieval augmentation (RAG), or fine-tuning. These are all statistical approaches — they reduce the probability of hallucination but can never eliminate it. CPUAGEN takes a fundamentally different approach: physics-based validation. Instead of asking 'is this probably correct?', CPUAGEN asks 'does this response satisfy the mathematical constraints required for truth alignment, coherence, and stability?' This is the difference between hoping a bridge won't fall down (statistical) and computing whether the forces balance (physics). The 8 CBFs provide mathematical guarantees that no purely statistical approach can match.",
+        "Traditional approaches to hallucination prevention rely on prompt engineering ('be accurate'), retrieval augmentation (RAG), or fine-tuning. These are all statistical approaches — they reduce the probability of hallucination but can never eliminate it. CPUAGEN takes a fundamentally different approach: physics-based validation. Instead of asking 'is this probably correct?', CPUAGEN asks 'does this response satisfy the mathematical constraints required for truth alignment, coherence, and stability?' This is the difference between hoping a bridge won't fall down (statistical) and computing whether the forces balance (physics). The CBF series provides mathematical guarantees that no purely statistical approach can match.",
         "",
         "## Supported LLM Providers and Models",
-        "CPUAGEN is provider-agnostic. It works with: Anthropic (Claude Opus, Sonnet, Haiku), OpenAI (GPT-4o, GPT-4o-mini, o1, o3-mini), Google (Gemini 2.0 Flash, Gemini 2.5 Pro), xAI (Grok), and more. The enforcement is identical regardless of which model you choose — the same 8 barriers, the same validation signatures, the same TEEP caching. You bring your own API key, and CPUAGEN wraps your chosen model in its enforcement layer. This means you can switch models freely and still get the same quality guarantees.",
+        "CPUAGEN is provider-agnostic. It works with: Anthropic (Claude Opus 4.6, Sonnet 4.6, Haiku 4.5), OpenAI (GPT-5.4, GPT-5.4 Pro, Codex 5.3, o3, o4-mini), Google (Gemini 3.1 Pro, Gemini 3 Flash), xAI (Grok 4.1), and more. The enforcement is identical regardless of which model you choose — the same barrier series, the same validation signatures, the same TEEP caching. You bring your own API key, and CPUAGEN wraps your chosen model in its enforcement layer. This means you can switch models freely and still get the same quality guarantees.",
         "",
         "## What Happens When a Barrier Fails?",
-        "When any of the 8 barriers detects a problem, the response is blocked entirely. CPUAGEN does not deliver partial results or 'best-effort' responses. This is by design — a response that fails even one barrier may contain hallucinations, inconsistencies, or quality issues. The enforcement badge in the chat shows exactly which barriers passed and which failed. In practice, most well-formed queries produce responses that pass all 8 barriers. Failures typically occur with adversarial inputs, edge cases, or when the LLM produces genuinely low-quality output.",
+        "When any barrier in the series detects a problem, the response is blocked entirely. CPUAGEN does not deliver partial results or 'best-effort' responses. This is by design — a response that fails even one barrier may contain hallucinations, inconsistencies, or quality issues. The enforcement badge in the chat shows exactly which barriers passed and which failed. In practice, most well-formed queries produce responses that pass all barriers. Failures typically occur with adversarial inputs, edge cases, or when the LLM produces genuinely low-quality output.",
         "",
         "## Physics-Based AI Enforcement",
         "Traditional AI safety uses statistical methods — RLHF (Reinforcement Learning from Human Feedback), Constitutional AI, guardrails. These approach safety as a probability problem. CPUAGEN approaches it as a physics problem. Every AI response has measurable physical properties: entropy (information content), coherence (internal consistency), energy (complexity bounds), stability (whether the response is a stable state or will decay). By computing these physical properties and checking them against mathematical constraints, CPUAGEN provides deterministic safety guarantees rather than probabilistic ones.",
@@ -1018,7 +1018,7 @@ export default function ChatPage() {
           <h2 className="text-2xl font-bold mb-3">Welcome to CPUAGEN</h2>
           <p className="text-muted text-sm mb-6 leading-relaxed">
             Connect your LLM to start chatting with physics-based enforcement.
-            Every response is validated through 8 control barriers and cached as a TEEP.
+            Every response is validated through a full series of control barriers and cached as a TEEP.
           </p>
           <Link
             href="/app/settings"
@@ -1080,7 +1080,7 @@ export default function ChatPage() {
             + New Chat
           </button>
           <span className="px-2 py-0.5 rounded bg-success/10 text-success border border-success/20 text-[10px] font-mono hidden sm:inline">
-            8/8 BARRIERS
+            BARRIERS ACTIVE
           </span>
         </div>
       </div>
@@ -1143,7 +1143,7 @@ export default function ChatPage() {
                 {"\ud83d\udee1\ufe0f"} CPUAGEN Enforcement Active
               </div>
               <p className="text-muted text-xs max-w-sm mx-auto mb-1 leading-relaxed">
-                Every message is validated by 8 safety barriers before and after reaching your LLM.
+                Every message is validated by a full series of safety barriers before and after reaching your LLM.
                 Validated answers are cached for instant future retrieval.
               </p>
               <div className="text-muted/60 text-[10px] font-mono mb-6">
@@ -1255,7 +1255,7 @@ export default function ChatPage() {
         </div>
         <div className="max-w-3xl mx-auto mt-2 flex items-center justify-between text-[10px] text-muted/70 font-mono">
           <span>Enter to send {"\u00B7"} Shift+Enter for newline {"\u00B7"} Drop files to attach</span>
-          <span>Enforcement: ON {"\u00B7"} 8/8 barriers {"\u00B7"} cache active</span>
+          <span>Enforcement: ON {"\u00B7"} all barriers active {"\u00B7"} cache active</span>
         </div>
       </div>
     </div>{/* end chat pane */}

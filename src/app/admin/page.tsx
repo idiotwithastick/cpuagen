@@ -133,7 +133,7 @@ export default function AdminLogin() {
             <span className="text-[10px] font-mono text-[#71717a]">SSD-RCI Enforcement Active</span>
           </div>
           <div className="text-[10px] font-mono text-[#71717a]/60 mt-1">
-            All admin actions enforced through 8 CBF barriers
+            All admin actions enforced through CBF barrier series
           </div>
         </div>
       </div>

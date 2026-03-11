@@ -144,7 +144,7 @@ export function recordEnforcementRequest(passed: boolean, failedBarriers?: strin
   state.enforcementStats.totalRequests++;
   if (passed) {
     state.enforcementStats.totalPassed++;
-    addEvent({ type: "enforcement_pass", ip: ip || "unknown", details: `${stage || "check"} — all 8 barriers SAFE` });
+    addEvent({ type: "enforcement_pass", ip: ip || "unknown", details: `${stage || "check"} — all barriers SAFE` });
   } else {
     state.enforcementStats.totalBlocked++;
     if (failedBarriers) {

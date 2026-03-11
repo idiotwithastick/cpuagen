@@ -151,7 +151,7 @@ function EnforcementDemo() {
   const steps = [
     { label: "INBOUND", desc: "Prompt received" },
     { label: "GATEWAY", desc: "Route & classify" },
-    { label: "VALIDATE", desc: "8 barriers active", highlight: true },
+    { label: "VALIDATE", desc: "Barrier series active", highlight: true },
     { label: "LLM", desc: "Model responds" },
     { label: "REVALIDATE", desc: "Output checked", highlight: true },
     { label: "DELIVER", desc: "Cached & sent" },
@@ -286,7 +286,7 @@ export default function Home() {
 
           <p className="text-lg sm:text-xl text-muted max-w-2xl mx-auto mb-10 leading-relaxed">
             CPUAGEN is the enforcement layer between you and your AI. Every
-            prompt is validated. Every response is checked against 8 safety
+            prompt is validated. Every response passes a full series of safety
             barriers. Every answer is permanently cached. Bring Claude, GPT,
             Gemini, Grok &mdash; we make them honest.
           </p>
@@ -321,7 +321,7 @@ export default function Home() {
             <div className="text-xs text-muted mt-1">Validated Responses</div>
           </div>
           <div>
-            <div className="text-2xl font-bold font-mono text-accent-light">8/8</div>
+            <div className="text-2xl font-bold font-mono text-accent-light">ALL</div>
             <div className="text-xs text-muted mt-1">Safety Barriers</div>
           </div>
           <div>
@@ -341,7 +341,7 @@ export default function Home() {
           <h2 className="text-3xl font-bold text-center mb-4">Every message. Enforced.</h2>
           <p className="text-muted text-center mb-12 max-w-xl mx-auto">
             Your prompt never touches the LLM raw. Every step of the validation
-            process is protected by 8 safety barriers that enforce correctness throughout.
+            process is protected by a full series of safety barriers that enforce correctness throughout.
           </p>
           <EnforcementDemo />
         </div>
@@ -434,7 +434,7 @@ export default function Home() {
               <h3 className="font-semibold text-success mb-4">With CPUAGEN</h3>
               <ul className="space-y-3 text-sm text-muted">
                 {[
-                  "8 control barriers block bad output",
+                  "Full barrier series blocks bad output",
                   "Solved once, cached forever",
                   "Mathematically validated responses",
                   "Any LLM, same enforcement",

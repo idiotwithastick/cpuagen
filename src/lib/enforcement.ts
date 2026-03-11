@@ -1,7 +1,7 @@
 // ========================================================================
 // SSD-RCI PHYSICS ENFORCEMENT — TypeScript Port (v11.0-Q Morphic Resonance)
 // ========================================================================
-// Implements: Thermosolve signatures, 8 CBF barriers, PsiState evolution,
+// Implements: Thermosolve signatures, CBF barrier series, PsiState evolution,
 //             AGF cache-first lookup, TEEP ledger persistence
 //             + Dynamic Fisher Metric (habit formation via geodesic convergence)
 //             + Semantic Mass (Ricci curvature-based TEEP weighting)

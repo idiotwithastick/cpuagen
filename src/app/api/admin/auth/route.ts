@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       token,
       enforcement: {
         signature: { n: sig.n, phi: sig.phi },
-        cbf: { allSafe: cbf.allSafe, barriers: 8 },
+        cbf: { allSafe: cbf.allSafe, series: "active" },
         teepId: `ADMIN-${teepId.split("-")[1]}`,
       },
       siteLocked: isSiteLocked(),
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
         attempts: result.attempts,
         enforcement: {
           signature: { n: sig.n, phi: sig.phi },
-          cbf: { allSafe: cbf.allSafe, barriers: 8 },
+          cbf: { allSafe: cbf.allSafe, series: "active" },
           teepId: `LOCKOUT-${teepId.split("-")[1]}`,
         },
       },
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
       attemptsRemaining: 3 - result.attempts,
       enforcement: {
         signature: { n: sig.n, phi: sig.phi },
-        cbf: { allSafe: cbf.allSafe, barriers: 8 },
+        cbf: { allSafe: cbf.allSafe, series: "active" },
         teepId: `FAIL-${teepId.split("-")[1]}`,
       },
     },
