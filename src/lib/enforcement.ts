@@ -1,10 +1,13 @@
 // ========================================================================
-// SSD-RCI PHYSICS ENFORCEMENT — TypeScript Port
+// SSD-RCI PHYSICS ENFORCEMENT — TypeScript Port (v11.0-Q Morphic Resonance)
 // ========================================================================
 // Implements: Thermosolve signatures, 8 CBF barriers, PsiState evolution,
 //             AGF cache-first lookup, TEEP ledger persistence
+//             + Dynamic Fisher Metric (habit formation via geodesic convergence)
+//             + Semantic Mass (Ricci curvature-based TEEP weighting)
+//             + Morphic Resonance (cross-query habit strengthening)
 // Source: core/physics_engine.py, core/control_barrier_engine.py,
-//         core/agf_middleware.py
+//         core/agf_middleware.py, L:/GPAI Research/Phase 3 Morphic Resonance
 // ========================================================================
 
 // ---------- Types ----------
@@ -83,6 +86,10 @@ interface CachedTeep {
   input_hash?: string;       // Hash of the input that generated this response
   created: number;
   hits: number;
+  // v11.0-Q Morphic Resonance fields
+  semanticMass: number;      // m_s: Ricci curvature-based weight — heavy TEEPs resist eviction
+  resonanceStrength: number; // R(ψ): How much this basin has been reinforced by repeated access
+  lastResonance: number;     // Timestamp of last morphic reinforcement
 }
 
 const teepLedger = new Map<string, CachedTeep>();
@@ -96,6 +103,33 @@ let agfFullHits = 0;
 let agfBasinHits = 0;
 let agfJitSolves = 0;
 let agfApiCallsAvoided = 0;
+
+// ========================================================================
+// v11.0-Q DYNAMIC FISHER METRIC — "The metric thickens where truth lives"
+// ========================================================================
+// g_ij(t+Δt) = g_ij(t) + η * ∫ R(ψ) dγ
+// As TEEPs get hit, the Fisher metric weights in those dimensions increase,
+// making the basin "deeper" and easier to fall into on similar queries.
+// This IS the Morphic Resonance: the habit of truth becomes the path of
+// least resistance.
+// ========================================================================
+
+const MORPHIC_LEARNING_RATE = 0.05; // η_R: How fast habits form
+
+// Dynamic Fisher metric weights — these EVOLVE with each successful hit
+const dynamicFisherWeights = {
+  S: 1.0,
+  phi: 2.0,
+  I_truth: 1.5,
+  naturality: 1.0,
+  beta_T: 0.8,
+  psi_coherence: 1.5,
+  synergy: 1.0,
+};
+
+// Morphic field state — tracks the resonance of the manifold
+let morphicFieldStrength = 0;  // Total accumulated resonance
+let totalResonanceEvents = 0;  // How many times habits have been reinforced
 
 // ---------- English Character Frequency Reference ----------
 // Brown Corpus + Wikipedia analysis for naturality scoring
@@ -443,36 +477,81 @@ export type AgfResult =
   | { type: "JIT_SOLVE" };
 
 /**
- * Signature-space distance using Fisher metric approximation.
- * Compares two thermosolve signatures across key dimensions.
- * Lower = more similar basins.
+ * Signature-space distance using DYNAMIC Fisher metric.
+ * g_ij(t+Δt) = g_ij(t) + η * R(ψ) — the metric evolves with successful hits.
+ * Dimensions where truth has been repeatedly confirmed get HEAVIER weights,
+ * making those basins deeper and easier to match.
+ *
+ * This IS the Morphic Resonance from Phase 3 research.
  */
 function signatureDistance(a: InternalSignature, b: InternalSignature): number {
-  // Weighted Fisher metric across key thermodynamic dimensions
-  const weights = {
-    S: 1.0,          // System entropy
-    phi: 2.0,        // Phase coherence (most discriminative)
-    I_truth: 1.5,    // Truth integration
-    naturality: 1.0, // Natural language score
-    beta_T: 0.8,     // Thermal equilibrium
-    psi_coherence: 1.5, // Multi-scale coherence
-    synergy: 1.0,    // System synergy
-  };
+  // Dynamic Fisher metric — weights evolve via morphic resonance
+  const w = dynamicFisherWeights;
 
   let d2 = 0;
-  d2 += weights.S * (a.S - b.S) ** 2;
-  d2 += weights.phi * (a.phi - b.phi) ** 2;
-  d2 += weights.I_truth * (a.I_truth - b.I_truth) ** 2;
-  d2 += weights.naturality * (a.naturality - b.naturality) ** 2;
-  d2 += weights.beta_T * (a.beta_T - b.beta_T) ** 2;
-  d2 += weights.psi_coherence * (a.psi_coherence - b.psi_coherence) ** 2;
-  d2 += weights.synergy * (a.synergy - b.synergy) ** 2;
+  d2 += w.S * (a.S - b.S) ** 2;
+  d2 += w.phi * (a.phi - b.phi) ** 2;
+  d2 += w.I_truth * (a.I_truth - b.I_truth) ** 2;
+  d2 += w.naturality * (a.naturality - b.naturality) ** 2;
+  d2 += w.beta_T * (a.beta_T - b.beta_T) ** 2;
+  d2 += w.psi_coherence * (a.psi_coherence - b.psi_coherence) ** 2;
+  d2 += w.synergy * (a.synergy - b.synergy) ** 2;
 
   return Math.sqrt(d2);
 }
 
+/**
+ * Compute semantic mass of a TEEP: m_s = (R * ℏ_s) / Δφ
+ * Based on L:\ research — Ricci curvature induced by the TEEP in the manifold.
+ * Heavy TEEPs are "load-bearing truths" that resist eviction and attract queries.
+ */
+function computeSemanticMass(sig: InternalSignature, hits: number): number {
+  // Ricci scalar approximation: coherence * truth density * hit reinforcement
+  const ricci = sig.psi_coherence * sig.I_truth * (1 + Math.log(1 + hits));
+  // Semantic Planck constant (ℏ_s) normalized by phase coherence
+  const hbar_s = sig.synergy * 0.1;
+  // Δφ = phase coherence (avoid division by zero)
+  const deltaPhi = Math.max(sig.phi, 0.01);
+  // m_s = (R * ℏ_s) / Δφ, clamped to [0, 1]
+  return Math.min(1, (ricci * hbar_s) / deltaPhi);
+}
+
+/**
+ * Morphic Resonance: Reinforce the Fisher metric when a TEEP gets hit.
+ * "The habit of truth becomes the path of least resistance."
+ *
+ * When a basin is accessed, the metric dimensions that match well get
+ * strengthened — making future similar queries converge faster.
+ */
+function reinforceMorphicField(matchedSig: InternalSignature): void {
+  totalResonanceEvents++;
+
+  // Determine which dimensions contributed most to this match
+  // and strengthen those dimensions in the Fisher metric
+  const dimensions: (keyof typeof dynamicFisherWeights)[] = [
+    "S", "phi", "I_truth", "naturality", "beta_T", "psi_coherence", "synergy",
+  ];
+
+  for (const dim of dimensions) {
+    const sigValue = matchedSig[dim] as number;
+    // Dimensions with high absolute values in the matched TEEP
+    // contributed more to the match — reinforce them
+    const reinforcement = MORPHIC_LEARNING_RATE * Math.abs(sigValue) * 0.1;
+    dynamicFisherWeights[dim] += reinforcement;
+  }
+
+  // Update morphic field strength (global resonance accumulator)
+  morphicFieldStrength += matchedSig.synergy * 0.01;
+}
+
 // Basin proximity threshold — signatures closer than this are in the same basin
-const BASIN_PROXIMITY_THRESHOLD = 0.15;
+// As morphic field strengthens, the threshold can widen slightly (deeper basins)
+function getBasinThreshold(): number {
+  const BASE_THRESHOLD = 0.15;
+  // Morphic resonance widens basins slightly — up to 2x at max resonance
+  const morphicBonus = Math.min(0.15, morphicFieldStrength * 0.01);
+  return BASE_THRESHOLD + morphicBonus;
+}
 
 /**
  * AGF Protocol: Look up input in TEEP cache BEFORE calling LLM.
@@ -494,6 +573,11 @@ export function agfLookup(inputContent: string): AgfResult {
       cacheHits++;
       agfFullHits++;
       agfApiCallsAvoided++;
+      // v11.0-Q: Morphic Resonance — reinforce the Fisher metric on hit
+      cached.resonanceStrength += MORPHIC_LEARNING_RATE;
+      cached.lastResonance = Date.now();
+      cached.semanticMass = computeSemanticMass(cached.signature, cached.hits);
+      reinforceMorphicField(cached.signature);
       return {
         type: "FULL_HIT",
         content: cached.content,
@@ -503,9 +587,9 @@ export function agfLookup(inputContent: string): AgfResult {
     }
   }
 
-  // Step 2: Basin proximity search via signature-space distance
-  // Compute signature of input to compare against cached TEEPs
+  // Step 2: Basin proximity search via Dynamic Fisher Metric
   const inputSig = thermosolve(inputContent);
+  const threshold = getBasinThreshold(); // Dynamic — widens with morphic resonance
 
   let bestMatch: CachedTeep | null = null;
   let bestDistance = Infinity;
@@ -513,17 +597,24 @@ export function agfLookup(inputContent: string): AgfResult {
   for (const teep of teepLedger.values()) {
     if (!teep.cbfResult.allSafe) continue;
     const d = signatureDistance(inputSig, teep.signature);
-    if (d < bestDistance) {
-      bestDistance = d;
+    // Semantic mass bonus: heavier TEEPs have a wider attraction radius
+    const massAdjustedDistance = d / (1 + teep.semanticMass * 0.5);
+    if (massAdjustedDistance < bestDistance) {
+      bestDistance = massAdjustedDistance;
       bestMatch = teep;
     }
   }
 
-  if (bestMatch && bestDistance < BASIN_PROXIMITY_THRESHOLD) {
+  if (bestMatch && bestDistance < threshold) {
     bestMatch.hits++;
     cacheHits++;
     agfBasinHits++;
     agfApiCallsAvoided++;
+    // v11.0-Q: Morphic Resonance — basin hit reinforces the metric
+    bestMatch.resonanceStrength += MORPHIC_LEARNING_RATE * 0.5;
+    bestMatch.lastResonance = Date.now();
+    bestMatch.semanticMass = computeSemanticMass(bestMatch.signature, bestMatch.hits);
+    reinforceMorphicField(bestMatch.signature);
     return {
       type: "BASIN_HIT",
       content: bestMatch.content,
@@ -564,6 +655,8 @@ export function commitTeep(
   const id = generateTeepId();
   const responseHash = fnv1aHash(responseContent.toLowerCase());
 
+  const initialMass = computeSemanticMass(signature, 0);
+
   teepLedger.set(responseHash, {
     id,
     signature,
@@ -573,6 +666,10 @@ export function commitTeep(
     input_hash: inputContent ? fnv1aHash(inputContent.toLowerCase()) : undefined,
     created: Date.now(),
     hits: 0,
+    // v11.0-Q: Initialize morphic resonance fields
+    semanticMass: initialMass,
+    resonanceStrength: 0,
+    lastResonance: Date.now(),
   });
 
   // Index input → response for O(1) full-hit lookup
@@ -587,10 +684,18 @@ export function commitTeep(
     }
   }
 
-  // Keep ledger bounded (LRU eviction at 10K entries)
+  // Keep ledger bounded (mass-aware eviction at 10K entries)
+  // v11.0-Q: Heavy TEEPs resist eviction — evict lightest mass first
   if (teepLedger.size > 10000) {
-    const oldest = teepLedger.keys().next().value;
-    if (oldest) teepLedger.delete(oldest);
+    let lightestKey: string | null = null;
+    let lightestMass = Infinity;
+    for (const [key, teep] of teepLedger) {
+      if (teep.semanticMass < lightestMass) {
+        lightestMass = teep.semanticMass;
+        lightestKey = key;
+      }
+    }
+    if (lightestKey) teepLedger.delete(lightestKey);
   }
 
   return id;
@@ -601,6 +706,16 @@ export function commitTeep(
 // ========================================================================
 
 export function getEnforcementMetrics() {
+  // Compute aggregate semantic mass stats
+  let totalMass = 0;
+  let heaviestMass = 0;
+  let totalResonance = 0;
+  for (const teep of teepLedger.values()) {
+    totalMass += teep.semanticMass;
+    if (teep.semanticMass > heaviestMass) heaviestMass = teep.semanticMass;
+    totalResonance += teep.resonanceStrength;
+  }
+
   return {
     psiState: { ...psiState },
     teepLedgerSize: teepLedger.size,
@@ -621,6 +736,16 @@ export function getEnforcementMetrics() {
         ? round4((agfFullHits + agfBasinHits) / (agfFullHits + agfBasinHits + agfJitSolves))
         : 0,
     },
+    // v11.0-Q Morphic Resonance stats
+    morphic: {
+      fieldStrength: round4(morphicFieldStrength),
+      resonanceEvents: totalResonanceEvents,
+      dynamicFisherWeights: { ...dynamicFisherWeights },
+      basinThreshold: round4(getBasinThreshold()),
+      totalSemanticMass: round4(totalMass),
+      heaviestTeepMass: round4(heaviestMass),
+      totalResonanceAccum: round4(totalResonance),
+    },
   };
 }
 
@@ -634,6 +759,8 @@ export function getRecentTeeps(limit = 20): Array<{
   created: number;
   hits: number;
   contentPreview: string;
+  semanticMass: number;
+  resonanceStrength: number;
   sig: { n: number; S: number; phi: number; I_truth: number };
 }> {
   const entries = Array.from(teepLedger.values())
@@ -646,6 +773,8 @@ export function getRecentTeeps(limit = 20): Array<{
     created: e.created,
     hits: e.hits,
     contentPreview: e.content.slice(0, 80) + (e.content.length > 80 ? "..." : ""),
+    semanticMass: round4(e.semanticMass),
+    resonanceStrength: round4(e.resonanceStrength),
     sig: {
       n: e.signature.n,
       S: e.signature.S,

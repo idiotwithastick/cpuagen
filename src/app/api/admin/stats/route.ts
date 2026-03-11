@@ -72,6 +72,7 @@ export async function GET(req: Request) {
         hitRate: metrics.hitRate,
       },
       agf: metrics.agf,
+      morphic: metrics.morphic,
       recentTeeps,
     },
     meta: {

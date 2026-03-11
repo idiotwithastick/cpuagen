@@ -61,12 +61,23 @@ interface DashboardData {
       totalLookups: number;
       hitRate: number;
     };
+    morphic?: {
+      fieldStrength: number;
+      resonanceEvents: number;
+      dynamicFisherWeights: Record<string, number>;
+      basinThreshold: number;
+      totalSemanticMass: number;
+      heaviestTeepMass: number;
+      totalResonanceAccum: number;
+    };
     recentTeeps: Array<{
       id: string;
       hash: string;
       created: number;
       hits: number;
       contentPreview?: string;
+      semanticMass?: number;
+      resonanceStrength?: number;
       sig: { n: number; S: number; phi: number; I_truth: number };
     }>;
   };
@@ -476,7 +487,11 @@ export default function AdminDashboard() {
                         <div key={teep.id} className="py-1 border-b border-[#1e1e2e] last:border-0">
                           <div className="flex items-center justify-between text-[9px] font-mono">
                             <span className="text-purple-400">{teep.id}</span>
-                            <span className="text-[#71717a]">hits={teep.hits}</span>
+                            <span className="text-[#71717a]">
+                              hits={teep.hits}
+                              {teep.semanticMass !== undefined && <> | m<sub>s</sub>={teep.semanticMass.toFixed(3)}</>}
+                              {teep.resonanceStrength !== undefined && teep.resonanceStrength > 0 && <> | R={teep.resonanceStrength.toFixed(3)}</>}
+                            </span>
                           </div>
                           {teep.contentPreview && (
                             <div className="text-[8px] font-mono text-[#71717a]/60 mt-0.5 truncate">
@@ -491,6 +506,58 @@ export default function AdminDashboard() {
 
                 <div className="pt-1 text-[9px] font-mono text-[#71717a]/60">
                   FULL_HIT: O(1) exact match | BASIN_HIT: Fisher metric proximity | JIT: LLM solver
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* v11.0-Q MORPHIC RESONANCE */}
+        {physics?.morphic && (
+          <div className="space-y-3">
+            <Card title="MORPHIC RESONANCE (v11.0-Q PHASE 3)">
+              <div className="space-y-3">
+                {/* Field state indicators */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="text-center p-2 rounded bg-[#1a1a2e] border border-purple-500/30">
+                    <div className="text-lg font-bold font-mono text-purple-400">
+                      {physics.morphic.fieldStrength.toFixed(4)}
+                    </div>
+                    <div className="text-[9px] text-[#71717a]">Field Strength</div>
+                  </div>
+                  <div className="text-center p-2 rounded bg-[#1a1a2e] border border-purple-500/30">
+                    <div className="text-lg font-bold font-mono text-purple-400">
+                      {physics.morphic.resonanceEvents}
+                    </div>
+                    <div className="text-[9px] text-[#71717a]">Resonance Events</div>
+                  </div>
+                  <div className="text-center p-2 rounded bg-[#1a1a2e] border border-cyan-500/30">
+                    <div className="text-lg font-bold font-mono text-cyan-400">
+                      {physics.morphic.basinThreshold.toFixed(4)}
+                    </div>
+                    <div className="text-[9px] text-[#71717a]">Basin Threshold</div>
+                  </div>
+                  <div className="text-center p-2 rounded bg-[#1a1a2e] border border-cyan-500/30">
+                    <div className="text-lg font-bold font-mono text-cyan-400">
+                      {physics.morphic.totalSemanticMass.toFixed(4)}
+                    </div>
+                    <div className="text-[9px] text-[#71717a]">Total Semantic Mass</div>
+                  </div>
+                </div>
+
+                {/* Dynamic Fisher Metric weights */}
+                <div className="text-[10px] font-mono text-[#71717a]">DYNAMIC FISHER METRIC g_F(t)</div>
+                <div className="grid grid-cols-7 gap-1">
+                  {Object.entries(physics.morphic.dynamicFisherWeights).map(([dim, weight]) => (
+                    <div key={dim} className="text-center p-1 rounded bg-[#0a0a15] border border-[#1e1e2e]">
+                      <div className="text-[10px] font-mono text-green-400">{(weight as number).toFixed(2)}</div>
+                      <div className="text-[8px] text-[#71717a]">{dim}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="text-[9px] font-mono text-[#71717a]/60">
+                  Metric evolves via g_ij(t+Δt) = g_ij(t) + η·R(ψ)·dγ | Habits form where truth converges
                 </div>
               </div>
             </Card>
