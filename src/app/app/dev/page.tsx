@@ -514,6 +514,7 @@ const EXAMPLE_PROMPTS = [
   { label: "Model consensus", prompt: "What is multi-model consensus in CPUAGEN? How does querying multiple AIs simultaneously improve accuracy?" },
   { label: "Bring your own key", prompt: "How does the 'bring your own API key' model work in CPUAGEN? Does CPUAGEN ever see my conversations?" },
   { label: "Future roadmap", prompt: "What's coming next for CPUAGEN? What features are planned for the future of the platform?" },
+  { label: "GreyBeam Markup", prompt: "What is GreyBeam in CPUAGEN? How does the PDF markup and annotation system work? Can the AI draw annotations on my PDFs?" },
 ];
 
 /* ─── Main chat page ─── */
@@ -948,10 +949,12 @@ export default function ChatPage() {
         "## The Knowledge Compounding Effect",
         "Unlike traditional AI chatbots where every question is answered from scratch, CPUAGEN's TEEP cache means knowledge compounds over time. The first time a question is answered and validated, it's cached permanently. Every subsequent identical or similar query returns the cached, pre-validated answer instantly. This creates a growing knowledge base of verified answers that gets faster and more comprehensive with every interaction. The system currently has over 7 million cached TEEPs.",
         "",
-        "# Canvas & Preview Features",
+        "# Canvas, Preview & GreyBeam Markup Features",
         "",
         "**Canvas** — A code editor panel on the right side of the chat. When you output a code block, the user can click 'Open in Canvas' to load it into the editor.",
         "**Preview** — A live HTML renderer (sandboxed iframe) alongside the Canvas. HTML content renders live and updates in real-time.",
+        "",
+        "**GreyBeam Markup** — A built-in PDF annotation and markup system integrated into CPUAGEN. GreyBeam is a browser-native alternative to Bluebeam Revu, offering 15 annotation tools: line, arrow, circle, rectangle, cloud, polyline, freehand, callout, highlight, hatch, stamp, count, measure, and text. Users can upload a PDF, annotate it directly in the Markup tab, and the AI can also send annotation commands to draw on PDFs programmatically. GreyBeam uses a dual-canvas architecture — a read-only PDF layer underneath and a transparent drawing overlay on top — for pixel-perfect annotations at any zoom level. All annotations are stored as plain JSON per page, making them fully serializable and AI-readable. The Markup tab appears alongside Canvas and Preview in the right panel. When a PDF is attached to a message, a 'Markup' button appears on the attachment chip to open it directly in GreyBeam. The AI can also emit annotation commands in fenced `annotation-command` code blocks, which render as 'Apply to Markup' buttons in the chat.",
         "",
         "**HTML generation rules:** Generate COMPLETE self-contained HTML with inline CSS/JS. No CDN links. Use ```html tag. Make it responsive and polished. For Canvas edits, output the COMPLETE updated code.",
       ].join("\n");

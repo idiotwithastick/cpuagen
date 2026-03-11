@@ -3,12 +3,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import type { Message, EnforcementResult, Conversation, Settings, ApiKeys, FileAttachment } from "@/lib/types";
+import type { Message, EnforcementResult, Conversation, Settings, ApiKeys, FileAttachment, PageAnnotations, AnnotationCommand } from "@/lib/types";
 import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS, FILE_LIMITS } from "@/lib/types";
 import type { ConsoleEntry } from "@/components/Canvas";
 
 const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 const Preview = dynamic(() => import("@/components/Preview"), { ssr: false });
+const GreyBeamCanvas = dynamic(() => import("@/components/GreyBeamCanvas"), { ssr: false });
 
 /* ─── HTML / Markdown detection ─── */
 function isHtmlContent(code: string, lang: string): boolean {
@@ -60,7 +61,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /* ─── Simple markdown renderer ─── */
-function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string) => void, onOpenPreview?: (code: string, lang: string) => void) {
+function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string) => void, onOpenPreview?: (code: string, lang: string) => void, onAnnotationCommand?: (cmds: AnnotationCommand[]) => void) {
   const parts: React.ReactNode[] = [];
   const lines = text.split("\n");
   let i = 0;
@@ -78,6 +79,31 @@ function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string
       }
       i++; // skip closing ```
       const codeText = codeLines.join("\n");
+
+      // Handle annotation-command blocks
+      if (lang === "annotation-command" && onAnnotationCommand) {
+        let cmds: AnnotationCommand[] = [];
+        try { cmds = JSON.parse(codeText); } catch { /* invalid JSON */ }
+        if (cmds.length > 0) {
+          const annCount = cmds.filter((c) => c.action === "add").length;
+          const pages = [...new Set(cmds.map((c) => c.page).filter(Boolean))];
+          parts.push(
+            <div key={key++} className="my-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <span className="text-[10px] font-mono text-amber-400">
+                {annCount} annotation{annCount !== 1 ? "s" : ""}{pages.length > 0 ? ` on page${pages.length > 1 ? "s" : ""} ${pages.join(", ")}` : ""}
+              </span>
+              <button
+                onClick={() => onAnnotationCommand(cmds)}
+                className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors cursor-pointer"
+              >
+                Apply to Markup
+              </button>
+            </div>,
+          );
+          continue;
+        }
+      }
+
       parts.push(
         <div key={key++} className="my-2 rounded-lg overflow-hidden border border-border">
           <div className="flex items-center justify-between px-3 py-1 bg-surface-light border-b border-border">
@@ -321,7 +347,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
 }
 
 /* ─── Attachment display ─── */
-function AttachmentChips({ attachments }: { attachments?: FileAttachment[] }) {
+function AttachmentChips({ attachments, onOpenInMarkup }: { attachments?: FileAttachment[]; onOpenInMarkup?: (att: FileAttachment) => void }) {
   if (!attachments || attachments.length === 0) return null;
 
   function formatSize(bytes: number) {
@@ -334,6 +360,7 @@ function AttachmentChips({ attachments }: { attachments?: FileAttachment[] }) {
     <div className="flex flex-wrap gap-1.5 mb-2">
       {attachments.map((att) => {
         const isImage = att.mimeType.startsWith("image/");
+        const isPdf = att.mimeType === "application/pdf" || att.name.toLowerCase().endsWith(".pdf");
         return (
           <div key={att.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-light border border-border text-[10px] font-mono text-muted">
             {isImage && att.dataUrl ? (
@@ -346,6 +373,14 @@ function AttachmentChips({ attachments }: { attachments?: FileAttachment[] }) {
             )}
             <span className="max-w-[120px] truncate">{att.name}</span>
             <span className="text-muted/60">{formatSize(att.size)}</span>
+            {isPdf && onOpenInMarkup && att.dataUrl && (
+              <button
+                onClick={() => onOpenInMarkup(att)}
+                className="px-1.5 py-0.5 rounded text-[9px] font-mono text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors cursor-pointer"
+              >
+                Markup
+              </button>
+            )}
           </div>
         );
       })}
@@ -354,7 +389,7 @@ function AttachmentChips({ attachments }: { attachments?: FileAttachment[] }) {
 }
 
 /* ─── Message bubble ─── */
-function MessageBubble({ message, onOpenCanvas, onOpenPreview }: { message: Message; onOpenCanvas?: (code: string, lang: string) => void; onOpenPreview?: (code: string, lang: string) => void }) {
+function MessageBubble({ message, onOpenCanvas, onOpenPreview, onOpenInMarkup, onAnnotationCommand }: { message: Message; onOpenCanvas?: (code: string, lang: string) => void; onOpenPreview?: (code: string, lang: string) => void; onOpenInMarkup?: (att: FileAttachment) => void; onAnnotationCommand?: (cmds: AnnotationCommand[]) => void }) {
   const isUser = message.role === "user";
 
   return (
@@ -365,7 +400,7 @@ function MessageBubble({ message, onOpenCanvas, onOpenPreview }: { message: Mess
             {isUser ? "you" : "assistant"}
           </span>
         </div>
-        {isUser && <AttachmentChips attachments={message.attachments} />}
+        {isUser && <AttachmentChips attachments={message.attachments} onOpenInMarkup={onOpenInMarkup} />}
         <div
           className={`px-4 py-3 rounded-xl text-sm leading-relaxed whitespace-pre-wrap ${
             isUser
@@ -374,7 +409,7 @@ function MessageBubble({ message, onOpenCanvas, onOpenPreview }: { message: Mess
           }`}
         >
           {message.content ? (
-            isUser ? message.content : renderMarkdown(message.content, onOpenCanvas, onOpenPreview)
+            isUser ? message.content : renderMarkdown(message.content, onOpenCanvas, onOpenPreview, onAnnotationCommand)
           ) : (
             <span className="inline-flex gap-1">
               <span className="w-1.5 h-1.5 bg-accent-light rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -479,6 +514,7 @@ const EXAMPLE_PROMPTS = [
   { label: "Model consensus", prompt: "What is multi-model consensus in CPUAGEN? How does querying multiple AIs simultaneously improve accuracy?" },
   { label: "Bring your own key", prompt: "How does the 'bring your own API key' model work in CPUAGEN? Does CPUAGEN ever see my conversations?" },
   { label: "Future roadmap", prompt: "What's coming next for CPUAGEN? What features are planned for the future of the platform?" },
+  { label: "GreyBeam Markup", prompt: "What is GreyBeam in CPUAGEN? How does the PDF markup and annotation system work? Can the AI draw annotations on my PDFs?" },
 ];
 
 /* ─── Main chat page ─── */
@@ -494,8 +530,11 @@ export default function ChatPage() {
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasCode, setCanvasCode] = useState("");
   const [canvasLang, setCanvasLang] = useState("");
-  const [activeTab, setActiveTab] = useState<"canvas" | "preview">("canvas");
+  const [activeTab, setActiveTab] = useState<"canvas" | "preview" | "markup">("canvas");
   const [consoleOutput, setConsoleOutput] = useState<ConsoleEntry[]>([]);
+  const [markupPdfData, setMarkupPdfData] = useState<ArrayBuffer | null>(null);
+  const [markupPdfName, setMarkupPdfName] = useState("");
+  const [markupAnnotations, setMarkupAnnotations] = useState<PageAnnotations>({});
   const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -735,6 +774,34 @@ export default function ChatPage() {
     setActiveTab("preview");
   }, []);
 
+  const openInMarkup = useCallback((att: FileAttachment) => {
+    if (!att.dataUrl) return;
+    const binary = atob(att.dataUrl.split(",")[1]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    setMarkupPdfData(bytes.buffer);
+    setMarkupPdfName(att.name);
+    setCanvasOpen(true);
+    setActiveTab("markup");
+  }, []);
+
+  const handleAnnotationCommand = useCallback((cmds: AnnotationCommand[]) => {
+    setMarkupAnnotations((prev) => {
+      const next = { ...prev };
+      for (const cmd of cmds) {
+        const page = cmd.page ?? 1;
+        if (cmd.action === "add" && cmd.annotation) {
+          next[page] = [...(next[page] || []), cmd.annotation];
+        } else if (cmd.action === "clear") {
+          next[page] = [];
+        }
+      }
+      return next;
+    });
+    setCanvasOpen(true);
+    setActiveTab("markup");
+  }, []);
+
   // sendMessageRef lets handleCanvasInstruction call sendMessage without circular deps
   const sendMessageRef = useRef<(text: string) => void>(() => {});
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -882,10 +949,12 @@ export default function ChatPage() {
         "## The Knowledge Compounding Effect",
         "Unlike traditional AI chatbots where every question is answered from scratch, CPUAGEN's TEEP cache means knowledge compounds over time. The first time a question is answered and validated, it's cached permanently. Every subsequent identical or similar query returns the cached, pre-validated answer instantly. This creates a growing knowledge base of verified answers that gets faster and more comprehensive with every interaction. The system currently has over 7 million cached TEEPs.",
         "",
-        "# Canvas & Preview Features",
+        "# Canvas, Preview & GreyBeam Markup Features",
         "",
         "**Canvas** — A code editor panel on the right side of the chat. When you output a code block, the user can click 'Open in Canvas' to load it into the editor.",
         "**Preview** — A live HTML renderer (sandboxed iframe) alongside the Canvas. HTML content renders live and updates in real-time.",
+        "",
+        "**GreyBeam Markup** — A built-in PDF annotation and markup system integrated into CPUAGEN. GreyBeam is a browser-native alternative to Bluebeam Revu, offering 15 annotation tools: line, arrow, circle, rectangle, cloud, polyline, freehand, callout, highlight, hatch, stamp, count, measure, and text. Users can upload a PDF, annotate it directly in the Markup tab, and the AI can also send annotation commands to draw on PDFs programmatically. GreyBeam uses a dual-canvas architecture — a read-only PDF layer underneath and a transparent drawing overlay on top — for pixel-perfect annotations at any zoom level. All annotations are stored as plain JSON per page, making them fully serializable and AI-readable. The Markup tab appears alongside Canvas and Preview in the right panel. When a PDF is attached to a message, a 'Markup' button appears on the attachment chip to open it directly in GreyBeam. The AI can also emit annotation commands in fenced `annotation-command` code blocks, which render as 'Apply to Markup' buttons in the chat.",
         "",
         "**HTML generation rules:** Generate COMPLETE self-contained HTML with inline CSS/JS. No CDN links. Use ```html tag. Make it responsive and polished. For Canvas edits, output the COMPLETE updated code.",
       ].join("\n");
@@ -1223,7 +1292,7 @@ export default function ChatPage() {
           </div>
         )}
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} onOpenCanvas={openCanvas} onOpenPreview={openPreview} />
+          <MessageBubble key={msg.id} message={msg} onOpenCanvas={openCanvas} onOpenPreview={openPreview} onOpenInMarkup={openInMarkup} onAnnotationCommand={handleAnnotationCommand} />
         ))}
         <div ref={messagesEndRef} />
       </div>
@@ -1348,6 +1417,17 @@ export default function ChatPage() {
                 <span className="w-1.5 h-1.5 bg-success rounded-full" />
               )}
             </button>
+            <button
+              onClick={() => setActiveTab("markup")}
+              className={`px-3 py-1.5 rounded-md text-[11px] font-mono transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeTab === "markup"
+                  ? "bg-amber-500/15 text-amber-400 border border-amber-500/25"
+                  : "text-muted hover:text-foreground hover:bg-surface-light"
+              }`}
+            >
+              Markup
+              {markupPdfData && <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />}
+            </button>
           </div>
           <button
             onClick={() => setCanvasOpen(false)}
@@ -1370,8 +1450,15 @@ export default function ChatPage() {
               onCodeChange={(code) => setCanvasCode(code)}
               consoleOutput={consoleOutput}
             />
-          ) : (
+          ) : activeTab === "preview" ? (
             <Preview code={canvasCode} language={canvasLang} onConsoleOutput={(entry) => setConsoleOutput((prev) => [...prev.slice(-199), entry])} />
+          ) : (
+            <GreyBeamCanvas
+              pdfData={markupPdfData}
+              pdfName={markupPdfName}
+              annotations={markupAnnotations}
+              onAnnotationsChange={setMarkupAnnotations}
+            />
           )}
         </div>
       </div>
