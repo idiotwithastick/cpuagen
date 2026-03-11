@@ -10,7 +10,7 @@ import type { ConsoleEntry } from "@/components/Canvas";
 const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 const Preview = dynamic(() => import("@/components/Preview"), { ssr: false });
 
-/* ─── HTML detection ─── */
+/* ─── HTML / Markdown detection ─── */
 function isHtmlContent(code: string, lang: string): boolean {
   const htmlLangs = ["html", "htm", "svg"];
   if (htmlLangs.includes(lang.toLowerCase())) return true;
@@ -21,6 +21,10 @@ function isHtmlContent(code: string, lang: string): boolean {
     trimmed.startsWith("<svg") ||
     (trimmed.startsWith("<") && (trimmed.includes("<body") || trimmed.includes("<div") || trimmed.includes("<style")))
   );
+}
+
+function isPreviewable(code: string, lang: string): boolean {
+  return isHtmlContent(code, lang) || ["md", "markdown"].includes(lang.toLowerCase());
 }
 
 /* ─── Copy button ─── */
@@ -79,7 +83,7 @@ function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string
           <div className="flex items-center justify-between px-3 py-1 bg-surface-light border-b border-border">
             <span className="text-[10px] font-mono text-muted">{lang || "code"}</span>
             <div className="flex items-center gap-1">
-              {onOpenPreview && isHtmlContent(codeText, lang) && codeText.length > 50 && (
+              {onOpenPreview && isPreviewable(codeText, lang) && codeText.length > 50 && (
                 <button
                   onClick={() => onOpenPreview(codeText, lang)}
                   className="px-2 py-0.5 rounded text-[10px] font-mono text-success hover:text-foreground hover:bg-success/10 transition-colors cursor-pointer"
@@ -720,7 +724,7 @@ export default function ChatPage() {
     setCanvasCode(code);
     setCanvasLang(lang);
     setCanvasOpen(true);
-    setActiveTab(isHtmlContent(code, lang) ? "preview" : "canvas");
+    setActiveTab(isPreviewable(code, lang) ? "preview" : "canvas");
   }, []);
 
   const openPreview = useCallback((code: string, lang: string) => {
@@ -732,11 +736,22 @@ export default function ChatPage() {
 
   // sendMessageRef lets handleCanvasInstruction call sendMessage without circular deps
   const sendMessageRef = useRef<(text: string) => void>(() => {});
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isCanvasEditRef = useRef(false);
 
   const handleCanvasInstruction = useCallback((instruction: string, code: string) => {
     const prompt = `[CANVAS EDIT REQUEST] Here is the current code in the Canvas editor. Please provide the complete updated code (not a diff):\n\n\`\`\`${canvasLang}\n${code}\n\`\`\`\n\n${instruction}`;
+    isCanvasEditRef.current = true;
     sendMessageRef.current(prompt);
   }, [canvasLang]);
+
+  const abortStream = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+  }, []);
 
   const sendMessage = useCallback(async (overrideInput?: string) => {
     const text = overrideInput ?? input;
@@ -885,9 +900,11 @@ export default function ChatPage() {
         { role: userMsg.role, content: userMsg.content },
       );
 
+      abortControllerRef.current = new AbortController();
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortControllerRef.current.signal,
         body: JSON.stringify({
           messages: allMessages,
           provider,
@@ -991,18 +1008,36 @@ export default function ChatPage() {
         }
       }
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Unknown error";
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, content: `Error: ${msg}` }
-            : m,
-        ),
-      );
+      if (error instanceof Error && error.name === "AbortError") {
+        // User clicked stop — keep partial content, don't show error
+      } else {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: m.content || `Error: ${msg}` }
+              : m,
+          ),
+        );
+      }
     } finally {
+      abortControllerRef.current = null;
       setLoading(false);
-      // v12.1: Metrics now saved via metrics_snapshot SSE event (same instance)
-      // The old /api/teep fetch was broken due to Vercel serverless isolation
+
+      // v12.1: Canvas edit round-trip — extract code block from LLM response
+      if (isCanvasEditRef.current) {
+        isCanvasEditRef.current = false;
+        setMessages((prev) => {
+          const assistantMsg = prev.find((m) => m.id === assistantId);
+          if (assistantMsg?.content) {
+            const codeBlockMatch = assistantMsg.content.match(/```[\w]*\n([\s\S]*?)```/);
+            if (codeBlockMatch) {
+              setCanvasCode(codeBlockMatch[1].trimEnd());
+            }
+          }
+          return prev;
+        });
+      }
     }
   }, [input, loading, isConfigured, messages, provider, apiKey, model, systemPrompt, activeConvId, pendingAttachments]);
 
@@ -1256,12 +1291,19 @@ export default function ChatPage() {
             className="flex-1 px-4 py-3 rounded-xl bg-background border border-border text-foreground placeholder:text-muted/50 text-sm resize-none focus:outline-none focus:border-accent/40 transition-colors disabled:opacity-50"
           />
           <button
-            onClick={() => sendMessage()}
-            disabled={loading || !input.trim()}
-            className="px-4 py-3 rounded-xl bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
+            onClick={loading ? abortStream : () => sendMessage()}
+            disabled={!loading && !input.trim()}
+            className={`px-4 py-3 rounded-xl font-semibold text-sm transition-colors cursor-pointer shrink-0 ${
+              loading
+                ? "bg-red-500 hover:bg-red-600 text-white"
+                : "bg-accent hover:bg-accent-light text-white disabled:opacity-30 disabled:cursor-not-allowed"
+            }`}
+            title={loading ? "Stop generating" : "Send message"}
           >
             {loading ? (
-              <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="3" y="3" width="10" height="10" rx="1" />
+              </svg>
             ) : (
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M1.5 1.5L14.5 8L1.5 14.5V9.5L10 8L1.5 6.5V1.5Z" />
