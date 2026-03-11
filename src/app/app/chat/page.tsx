@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import type { Message, EnforcementResult, Conversation } from "@/lib/types";
-import { PROVIDERS } from "@/lib/types";
+import type { Message, EnforcementResult, Conversation, Settings, ApiKeys, FileAttachment } from "@/lib/types";
+import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS, FILE_LIMITS } from "@/lib/types";
 
 const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 const Preview = dynamic(() => import("@/components/Preview"), { ssr: false });
@@ -315,6 +315,39 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
   );
 }
 
+/* ─── Attachment display ─── */
+function AttachmentChips({ attachments }: { attachments?: FileAttachment[] }) {
+  if (!attachments || attachments.length === 0) return null;
+
+  function formatSize(bytes: number) {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5 mb-2">
+      {attachments.map((att) => {
+        const isImage = att.mimeType.startsWith("image/");
+        return (
+          <div key={att.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-light border border-border text-[10px] font-mono text-muted">
+            {isImage && att.dataUrl ? (
+              <img src={att.dataUrl} alt={att.name} className="w-6 h-6 rounded object-cover" />
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
+                <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" />
+                <path d="M7 1v3h3" />
+              </svg>
+            )}
+            <span className="max-w-[120px] truncate">{att.name}</span>
+            <span className="text-muted/60">{formatSize(att.size)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ─── Message bubble ─── */
 function MessageBubble({ message, onOpenCanvas, onOpenPreview }: { message: Message; onOpenCanvas?: (code: string, lang: string) => void; onOpenPreview?: (code: string, lang: string) => void }) {
   const isUser = message.role === "user";
@@ -327,6 +360,7 @@ function MessageBubble({ message, onOpenCanvas, onOpenPreview }: { message: Mess
             {isUser ? "you" : "assistant"}
           </span>
         </div>
+        {isUser && <AttachmentChips attachments={message.attachments} />}
         <div
           className={`px-4 py-3 rounded-xl text-sm leading-relaxed whitespace-pre-wrap ${
             isUser
@@ -380,9 +414,34 @@ function loadConversations(): Conversation[] {
 
 function saveConversations(convs: Conversation[]) {
   try {
-    localStorage.setItem("cpuagen-conversations", JSON.stringify(convs));
+    const json = JSON.stringify(convs);
+    // If total JSON > 4MB, strip dataUrl from attachments to prevent storage overflow
+    if (json.length > 4 * 1024 * 1024) {
+      const stripped = convs.map((c) => ({
+        ...c,
+        messages: c.messages.map((m) => ({
+          ...m,
+          attachments: m.attachments?.map((a) => ({ ...a, dataUrl: "" })),
+        })),
+      }));
+      localStorage.setItem("cpuagen-conversations", JSON.stringify(stripped));
+    } else {
+      localStorage.setItem("cpuagen-conversations", json);
+    }
   } catch {
-    // storage full
+    // storage full — try stripping attachments
+    try {
+      const stripped = convs.map((c) => ({
+        ...c,
+        messages: c.messages.map((m) => ({
+          ...m,
+          attachments: m.attachments?.map((a) => ({ ...a, dataUrl: "" })),
+        })),
+      }));
+      localStorage.setItem("cpuagen-conversations", JSON.stringify(stripped));
+    } catch {
+      // truly full
+    }
   }
 }
 
@@ -424,31 +483,33 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [provider, setProvider] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [hydrated, setHydrated] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasCode, setCanvasCode] = useState("");
   const [canvasLang, setCanvasLang] = useState("");
   const [activeTab, setActiveTab] = useState<"canvas" | "preview">("canvas");
+  const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Derived from settings
+  const provider = settings.activeProvider;
+  const model = settings.activeModel;
+  const systemPrompt = settings.systemPrompt;
+  const apiKey = settings.apiKeys[provider as keyof ApiKeys] || "";
 
   // Load settings + conversations
   useEffect(() => {
     try {
       const saved = localStorage.getItem("cpuagen-settings");
       if (saved) {
-        const s = JSON.parse(saved);
-        setProvider(s.provider || "");
-        setApiKey(s.apiKey || "");
-        setModel(s.model || "");
-        setSystemPrompt(s.systemPrompt || "");
+        const parsed = JSON.parse(saved);
+        setSettings(migrateSettings(parsed));
       }
     } catch {
       // ignore
@@ -546,9 +607,82 @@ export default function ChatPage() {
     }
   }, [messages, canvasOpen, loading]);
 
-  const providerConfig = PROVIDERS.find((p) => p.id === provider);
+  const providerConfig = PROVIDERS.find((p) => p.id === settings.activeProvider);
   const isDemo = providerConfig?.noKeyRequired;
-  const isConfigured = Boolean(provider && model && (isDemo || apiKey));
+  const isConfigured = Boolean(settings.activeProvider && settings.activeModel && (isDemo || apiKey));
+
+  // Providers that have keys configured (for switcher dropdown)
+  const availableProviders = PROVIDERS.filter(
+    (p) => p.noKeyRequired || settings.apiKeys[p.id as keyof ApiKeys],
+  );
+
+  const handleProviderSwitch = (newProvider: string) => {
+    const config = PROVIDERS.find((p) => p.id === newProvider);
+    if (!config) return;
+    const newSettings: Settings = {
+      ...settings,
+      activeProvider: newProvider as Settings["activeProvider"],
+      activeModel: config.defaultModel,
+    };
+    setSettings(newSettings);
+    localStorage.setItem("cpuagen-settings", JSON.stringify(newSettings));
+  };
+
+  const handleModelSwitch = (newModel: string) => {
+    const newSettings: Settings = { ...settings, activeModel: newModel };
+    setSettings(newSettings);
+    localStorage.setItem("cpuagen-settings", JSON.stringify(newSettings));
+  };
+
+  // File attachment handlers
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    processFiles(Array.from(files));
+    e.target.value = "";
+  };
+
+  const processFiles = (files: File[]) => {
+    for (const file of files) {
+      if (pendingAttachments.length >= FILE_LIMITS.maxFilesPerMessage) break;
+      if (file.size > FILE_LIMITS.maxFileSize) continue;
+
+      const isAllowedMime = FILE_LIMITS.allowedMimeTypes.includes(file.type as typeof FILE_LIMITS.allowedMimeTypes[number]);
+      const isAllowedExt = FILE_LIMITS.codeExtensions.test(file.name);
+      if (!isAllowedMime && !isAllowedExt) continue;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const attachment: FileAttachment = {
+          id: crypto.randomUUID(),
+          name: file.name,
+          mimeType: file.type || "text/plain",
+          size: file.size,
+          dataUrl,
+        };
+        setPendingAttachments((prev) => {
+          if (prev.length >= FILE_LIMITS.maxFilesPerMessage) return prev;
+          return [...prev, attachment];
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeAttachment = (id: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files);
+    processFiles(files);
+  }, [pendingAttachments.length]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
 
   const startNewChat = () => {
     const id = crypto.randomUUID();
@@ -602,11 +736,16 @@ export default function ChatPage() {
     const text = overrideInput ?? input;
     if (!text.trim() || loading || !isConfigured) return;
 
+    // Capture and clear attachments
+    const msgAttachments = pendingAttachments.length > 0 ? [...pendingAttachments] : undefined;
+    setPendingAttachments([]);
+
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: "user",
       content: text.trim(),
       timestamp: Date.now(),
+      attachments: msgAttachments,
     };
 
     const assistantId = crypto.randomUUID();
@@ -743,7 +882,17 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: allMessages, provider, apiKey, model }),
+        body: JSON.stringify({
+          messages: allMessages,
+          provider,
+          apiKey,
+          model,
+          attachments: msgAttachments?.map((a) => ({
+            name: a.name,
+            mimeType: a.mimeType,
+            dataUrl: a.dataUrl,
+          })),
+        }),
       });
 
       if (!res.ok) {
@@ -837,7 +986,7 @@ export default function ChatPage() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, isConfigured, messages, provider, apiKey, model, systemPrompt, activeConvId]);
+  }, [input, loading, isConfigured, messages, provider, apiKey, model, systemPrompt, activeConvId, pendingAttachments]);
 
   sendMessageRef.current = sendMessage;
 
@@ -898,9 +1047,27 @@ export default function ChatPage() {
             </svg>
           </button>
           <span className="w-1.5 h-1.5 bg-success rounded-full" />
-          <span className="text-xs font-mono text-muted">
-            {providerConfig?.name} / {model}
-          </span>
+          <select
+            value={settings.activeProvider}
+            onChange={(e) => handleProviderSwitch(e.target.value)}
+            disabled={loading}
+            className="text-[11px] font-mono text-muted bg-transparent border-none outline-none cursor-pointer appearance-none pr-3 hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            {availableProviders.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <span className="text-muted/40">/</span>
+          <select
+            value={settings.activeModel}
+            onChange={(e) => handleModelSwitch(e.target.value)}
+            disabled={loading}
+            className="text-[11px] font-mono text-muted bg-transparent border-none outline-none cursor-pointer appearance-none pr-2 hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            {providerConfig?.models.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -1009,13 +1176,63 @@ export default function ChatPage() {
 
       {/* Input */}
       <div className="border-t border-border p-4 bg-surface/30 shrink-0">
-        <div className="max-w-3xl mx-auto flex gap-2">
+        {/* Pending attachments */}
+        {pendingAttachments.length > 0 && (
+          <div className="max-w-3xl mx-auto mb-2 flex flex-wrap gap-1.5">
+            {pendingAttachments.map((att) => (
+              <div key={att.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent/10 border border-accent/20 text-[10px] font-mono text-accent-light">
+                {att.mimeType.startsWith("image/") ? (
+                  <img src={att.dataUrl} alt={att.name} className="w-5 h-5 rounded object-cover" />
+                ) : (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" />
+                  </svg>
+                )}
+                <span className="max-w-[100px] truncate">{att.name}</span>
+                <button
+                  onClick={() => removeAttachment(att.id)}
+                  className="text-muted hover:text-danger transition-colors cursor-pointer ml-0.5"
+                >
+                  {"\u00D7"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div
+          className="max-w-3xl mx-auto flex gap-2"
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+        >
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={FILE_LIMITS.allowedMimeTypes.join(",")}
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+
+          {/* Attach button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || pendingAttachments.length >= FILE_LIMITS.maxFilesPerMessage}
+            className="px-3 py-3 rounded-xl bg-surface border border-border hover:border-accent/30 text-muted hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
+            title="Attach files"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5l5.8-5.8a2.1 2.1 0 013 3L6.2 11.8a1.1 1.1 0 01-1.5-1.5L10 5" />
+            </svg>
+          </button>
+
           <textarea
             ref={textareaRef}
             value={input}
             onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
-            placeholder="Message with enforcement..."
+            placeholder={pendingAttachments.length > 0 ? "Add a message about the attached files..." : "Message with enforcement..."}
             disabled={loading}
             rows={1}
             className="flex-1 px-4 py-3 rounded-xl bg-background border border-border text-foreground placeholder:text-muted/50 text-sm resize-none focus:outline-none focus:border-accent/40 transition-colors disabled:opacity-50"
@@ -1035,7 +1252,7 @@ export default function ChatPage() {
           </button>
         </div>
         <div className="max-w-3xl mx-auto mt-2 flex items-center justify-between text-[10px] text-muted/70 font-mono">
-          <span>Enter to send {"\u00B7"} Shift+Enter for newline</span>
+          <span>Enter to send {"\u00B7"} Shift+Enter for newline {"\u00B7"} Drop files to attach</span>
           <span>Enforcement: ON {"\u00B7"} 8/8 barriers {"\u00B7"} cache active</span>
         </div>
       </div>

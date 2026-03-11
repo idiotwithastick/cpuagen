@@ -4,11 +4,18 @@ import { recordEnforcementRequest, recordTeepCached } from "@/lib/security-state
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+interface FileAttachmentPayload {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+}
+
 interface ChatRequest {
   messages: { role: string; content: string }[];
   provider: string;
   apiKey: string;
   model: string;
+  attachments?: FileAttachmentPayload[];
 }
 
 function sseEvent(data: unknown): string {
@@ -30,8 +37,116 @@ function sanitizeCbf(cbf: Record<string, unknown>): Record<string, unknown> {
   return sanitized;
 }
 
+function parseDataUrl(dataUrl: string): { mimeType: string; data: string } {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return { mimeType: "application/octet-stream", data: "" };
+  return { mimeType: match[1], data: match[2] };
+}
+
+function isImageMime(mime: string): boolean {
+  return mime.startsWith("image/");
+}
+
+function isPdfMime(mime: string): boolean {
+  return mime === "application/pdf";
+}
+
+// Build multimodal content array for the last user message based on provider
+function buildMultipartContent(
+  text: string,
+  attachments: FileAttachmentPayload[],
+  provider: string,
+): unknown[] | string {
+  if (!attachments || attachments.length === 0) return text;
+
+  if (provider === "anthropic") {
+    const parts: unknown[] = [];
+    for (const att of attachments) {
+      const { mimeType, data } = parseDataUrl(att.dataUrl);
+      if (isImageMime(mimeType)) {
+        parts.push({
+          type: "image",
+          source: { type: "base64", media_type: mimeType, data },
+        });
+      } else if (isPdfMime(mimeType)) {
+        parts.push({
+          type: "document",
+          source: { type: "base64", media_type: mimeType, data },
+        });
+      } else {
+        // Text/code files — decode base64 to UTF-8
+        const decoded = Buffer.from(data, "base64").toString("utf-8");
+        parts.push({
+          type: "text",
+          text: `[File: ${att.name}]\n${decoded}`,
+        });
+      }
+    }
+    parts.push({ type: "text", text });
+    return parts;
+  }
+
+  if (provider === "openai" || provider === "xai") {
+    const parts: unknown[] = [];
+    for (const att of attachments) {
+      const { mimeType, data } = parseDataUrl(att.dataUrl);
+      if (isImageMime(mimeType)) {
+        parts.push({
+          type: "image_url",
+          image_url: { url: att.dataUrl },
+        });
+      } else if (isPdfMime(mimeType)) {
+        // OpenAI/xAI don't support PDF natively — include as text note
+        parts.push({
+          type: "text",
+          text: `[PDF attached: ${att.name} — PDF content cannot be directly processed by this model. Consider using Anthropic or Google for native PDF support.]`,
+        });
+      } else {
+        const decoded = Buffer.from(data, "base64").toString("utf-8");
+        parts.push({
+          type: "text",
+          text: `[File: ${att.name}]\n${decoded}`,
+        });
+      }
+    }
+    parts.push({ type: "text", text });
+    return parts;
+  }
+
+  if (provider === "google") {
+    // Google uses a different format — handled in streamGoogle
+    // Return a special marker
+    return text;
+  }
+
+  return text;
+}
+
+// Build Google-specific parts array including inline data
+function buildGoogleParts(
+  text: string,
+  attachments?: FileAttachmentPayload[],
+): unknown[] {
+  const parts: unknown[] = [];
+  if (attachments && attachments.length > 0) {
+    for (const att of attachments) {
+      const { mimeType, data } = parseDataUrl(att.dataUrl);
+      if (isImageMime(mimeType) || isPdfMime(mimeType)) {
+        parts.push({
+          inlineData: { mimeType, data },
+        });
+      } else {
+        const decoded = Buffer.from(data, "base64").toString("utf-8");
+        parts.push({ text: `[File: ${att.name}]\n${decoded}` });
+      }
+    }
+  }
+  parts.push({ text });
+  return parts;
+}
+
 async function streamAnthropic(
-  messages: { role: string; content: string }[],
+  messages: { role: string; content: unknown }[],
   apiKey: string,
   model: string,
   controller: ReadableStreamDefaultController,
@@ -40,7 +155,7 @@ async function streamAnthropic(
   // Anthropic requires system prompt as a separate 'system' field, not in messages
   const systemMsgs = messages.filter((m) => m.role === "system");
   const nonSystemMsgs = messages.filter((m) => m.role !== "system");
-  const systemText = systemMsgs.map((m) => m.content).join("\n\n");
+  const systemText = systemMsgs.map((m) => m.content as string).join("\n\n");
 
   const body: Record<string, unknown> = {
     model,
@@ -103,7 +218,7 @@ async function streamAnthropic(
 }
 
 async function streamOpenAI(
-  messages: { role: string; content: string }[],
+  messages: { role: string; content: unknown }[],
   apiKey: string,
   model: string,
   controller: ReadableStreamDefaultController,
@@ -160,21 +275,31 @@ async function streamOpenAI(
 }
 
 async function streamGoogle(
-  messages: { role: string; content: string }[],
+  messages: { role: string; content: unknown }[],
   apiKey: string,
   model: string,
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder,
+  lastUserAttachments?: FileAttachmentPayload[],
 ) {
   // Google uses systemInstruction for system messages
   const systemMsgs = messages.filter((m) => m.role === "system");
   const nonSystemMsgs = messages.filter((m) => m.role !== "system");
-  const systemText = systemMsgs.map((m) => m.content).join("\n\n");
+  const systemText = systemMsgs.map((m) => m.content as string).join("\n\n");
 
-  const contents = nonSystemMsgs.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
+  const contents = nonSystemMsgs.map((m, idx) => {
+    const isLastUser = m.role === "user" && idx === nonSystemMsgs.length - 1;
+    if (isLastUser && lastUserAttachments && lastUserAttachments.length > 0) {
+      return {
+        role: "user",
+        parts: buildGoogleParts(m.content as string, lastUserAttachments),
+      };
+    }
+    return {
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content as string }],
+    };
+  });
 
   const body: Record<string, unknown> = { contents };
   if (systemText) {
@@ -232,7 +357,7 @@ async function streamGoogle(
 }
 
 async function streamXAI(
-  messages: { role: string; content: string }[],
+  messages: { role: string; content: unknown }[],
   apiKey: string,
   model: string,
   controller: ReadableStreamDefaultController,
@@ -297,7 +422,7 @@ export async function POST(req: Request) {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const { messages, provider: rawProvider, apiKey: clientKey, model: rawModel } = body;
+  const { messages, provider: rawProvider, apiKey: clientKey, model: rawModel, attachments } = body;
 
   if (!messages?.length || !rawProvider || !rawModel) {
     return new Response("Missing required fields", { status: 400 });
@@ -306,7 +431,7 @@ export async function POST(req: Request) {
   // Demo mode: resolve to real provider + server-side API key
   let provider = rawProvider;
   let apiKey = clientKey || "";
-  let model = rawModel;
+  const model = rawModel;
 
   if (rawProvider === "demo") {
     // Map demo models to real providers
@@ -324,7 +449,6 @@ export async function POST(req: Request) {
     }
     provider = mapping.provider;
     apiKey = serverKey;
-    model = rawModel;
   } else if (!clientKey) {
     return new Response("Missing API key", { status: 400 });
   }
@@ -381,20 +505,33 @@ export async function POST(req: Request) {
           return;
         }
 
+        // Build messages with multipart content for attachments
+        const apiMessages: { role: string; content: unknown }[] = messages.map((m, idx) => {
+          // Only the last user message gets attachments
+          const isLastUser = m.role === "user" && idx === messages.length - 1;
+          if (isLastUser && attachments && attachments.length > 0 && provider !== "google") {
+            return {
+              role: m.role,
+              content: buildMultipartContent(m.content, attachments, provider),
+            };
+          }
+          return { role: m.role, content: m.content };
+        });
+
         // STREAM FROM LLM
         let fullContent = "";
         switch (provider) {
           case "anthropic":
-            fullContent = await streamAnthropic(messages, apiKey, model, controller, encoder);
+            fullContent = await streamAnthropic(apiMessages, apiKey, model, controller, encoder);
             break;
           case "openai":
-            fullContent = await streamOpenAI(messages, apiKey, model, controller, encoder);
+            fullContent = await streamOpenAI(apiMessages, apiKey, model, controller, encoder);
             break;
           case "google":
-            fullContent = await streamGoogle(messages, apiKey, model, controller, encoder);
+            fullContent = await streamGoogle(apiMessages, apiKey, model, controller, encoder, attachments);
             break;
           case "xai":
-            fullContent = await streamXAI(messages, apiKey, model, controller, encoder);
+            fullContent = await streamXAI(apiMessages, apiKey, model, controller, encoder);
             break;
           default:
             controller.enqueue(encoder.encode(sseEvent({ type: "error", message: `Unknown provider: ${provider}` })));

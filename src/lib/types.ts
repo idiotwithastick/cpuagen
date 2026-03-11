@@ -9,12 +9,71 @@ export interface ProviderConfig {
   noKeyRequired?: boolean;
 }
 
+export interface FileAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl: string;
+  preview?: string;
+}
+
+export const FILE_LIMITS = {
+  maxFileSize: 20 * 1024 * 1024,
+  maxFilesPerMessage: 5,
+  allowedMimeTypes: [
+    "image/png", "image/jpeg", "image/gif", "image/webp",
+    "application/pdf",
+    "text/plain", "text/markdown", "text/csv",
+    "text/x-python", "text/javascript", "text/typescript",
+    "application/json", "text/xml", "text/html", "text/css",
+  ],
+  codeExtensions: /\.(py|js|ts|tsx|jsx|rs|go|java|c|cpp|h|rb|php|sh|bat|yaml|yml|toml|ini|cfg|sql|md|txt|csv|json)$/,
+} as const;
+
+export interface ApiKeys {
+  anthropic?: string;
+  openai?: string;
+  google?: string;
+  xai?: string;
+}
+
+export interface Settings {
+  activeProvider: Provider;
+  activeModel: string;
+  systemPrompt: string;
+  apiKeys: ApiKeys;
+}
+
+export function migrateSettings(raw: Record<string, unknown>): Settings {
+  if (raw.apiKeys && raw.activeProvider) {
+    return raw as unknown as Settings;
+  }
+  const oldProvider = (raw.provider as Provider) || "demo";
+  const oldApiKey = (raw.apiKey as string) || "";
+  const oldModel = (raw.model as string) || "";
+  const oldSystemPrompt = (raw.systemPrompt as string) || "";
+  const apiKeys: ApiKeys = {};
+  if (oldApiKey && oldProvider !== "demo") {
+    apiKeys[oldProvider as keyof ApiKeys] = oldApiKey;
+  }
+  return { activeProvider: oldProvider, activeModel: oldModel, systemPrompt: oldSystemPrompt, apiKeys };
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  activeProvider: "demo",
+  activeModel: "gemini-2.0-flash",
+  systemPrompt: "",
+  apiKeys: {},
+};
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: number;
   enforcement?: EnforcementResult;
+  attachments?: FileAttachment[];
 }
 
 export interface ValidationSignature {
