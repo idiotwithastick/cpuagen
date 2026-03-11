@@ -115,6 +115,65 @@ export interface Conversation {
   updatedAt: number;
 }
 
+/* ─── GreyBeam Annotation Types ─── */
+
+export type AnnotationType =
+  | "line" | "arrow" | "circle" | "rectangle" | "cloud"
+  | "polyline" | "freehand" | "callout" | "highlight" | "hatch"
+  | "stamp" | "count" | "measure" | "text";
+
+export type StampType = "APPROVED" | "REJECTED" | "REVISED" | "REVIEWED" | "DRAFT" | "VOID" | "PRELIMINARY" | "FINAL";
+
+export interface AnnotationBase {
+  type: AnnotationType;
+  color: string;
+  width: number;
+}
+
+export interface DragAnnotation extends AnnotationBase {
+  type: "line" | "arrow" | "circle" | "rectangle" | "cloud" | "highlight" | "hatch" | "callout" | "measure";
+  x1: number; y1: number;
+  x2: number; y2: number;
+  text?: string;
+  unit?: string;
+  measureScale?: number;
+}
+
+export interface PointAnnotation extends AnnotationBase {
+  type: "freehand" | "polyline";
+  points: { x: number; y: number }[];
+}
+
+export interface ClickAnnotation extends AnnotationBase {
+  type: "stamp" | "count" | "text";
+  x: number; y: number;
+  text?: string;
+  stampType?: StampType;
+  number?: number;
+}
+
+export type Annotation = DragAnnotation | PointAnnotation | ClickAnnotation;
+
+export type PageAnnotations = Record<number, Annotation[]>;
+
+export interface AnnotationCommand {
+  action: "add" | "clear" | "undo" | "redo" | "set-tool" | "set-color" | "export";
+  page?: number;
+  annotation?: Annotation;
+  tool?: AnnotationType | "select";
+  color?: string;
+  width?: number;
+}
+
+export interface MarkupState {
+  pdfName: string | null;
+  pageCount: number;
+  currentPage: number;
+  annotations: PageAnnotations;
+  activeTool: string;
+  activeColor: string;
+}
+
 export const PROVIDERS: ProviderConfig[] = [
   {
     id: "demo",

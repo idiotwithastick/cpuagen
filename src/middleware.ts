@@ -5,6 +5,12 @@ const SITE_PASSWORD = process.env.SITE_PASSWORD || "026F3AA3A";
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  // Bypass auth on localhost for local development
+  const host = request.headers.get("host") || "";
+  if (host.startsWith("localhost") || host.startsWith("127.0.0.1")) {
+    return NextResponse.next();
+  }
+
   // Admin pages bypass site auth (admin has its own auth system)
   // But add security headers to prevent indexing and clickjacking
   if (pathname.startsWith("/admin")) {

@@ -10,6 +10,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const nav = [
     { href: "/app/chat", label: "Chat", active: pathname?.startsWith("/app/chat") },
+    { href: "/app/dev", label: "Dev Lab", active: pathname?.startsWith("/app/dev") },
     { href: "/app/settings", label: "Settings", active: pathname?.startsWith("/app/settings") },
   ];
 
@@ -50,7 +51,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               }`}
             >
               <span className="w-5 text-center">
-                {item.label === "Chat" ? "\u{1F4AC}" : "\u2699\uFE0F"}
+                {item.label === "Chat" ? "\u{1F4AC}" : item.label === "Dev Lab" ? "\u{1F9EA}" : "\u2699\uFE0F"}
               </span>
               {item.label}
             </Link>
