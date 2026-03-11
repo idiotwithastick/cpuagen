@@ -72,6 +72,7 @@ export async function GET(req: Request) {
         cacheMisses: metrics.cacheMisses,
         hitRate: metrics.hitRate,
       },
+      spatialGridCells: metrics.spatialGridCells,
       agf: metrics.agf,
       morphic: metrics.morphic,
       recentTeeps,

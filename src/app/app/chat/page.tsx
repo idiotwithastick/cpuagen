@@ -525,6 +525,20 @@ export default function ChatPage() {
       setMessages(latest.messages);
     }
     setHydrated(true);
+
+    // v12.0: Restore TEEP engine state from localStorage
+    try {
+      const teepSnapshot = localStorage.getItem("cpuagen-teep-state");
+      if (teepSnapshot) {
+        fetch("/api/teep", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ snapshot: JSON.parse(teepSnapshot) }),
+        }).catch(() => {/* ignore */});
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   // Persist conversations on change
@@ -987,6 +1001,12 @@ export default function ChatPage() {
       );
     } finally {
       setLoading(false);
+      // v12.0: Auto-persist TEEP engine state after each response
+      fetch("/api/teep").then(r => r.json()).then(data => {
+        if (data.ok && data.snapshot) {
+          try { localStorage.setItem("cpuagen-teep-state", JSON.stringify(data.snapshot)); } catch {/* quota */}
+        }
+      }).catch(() => {/* ignore */});
     }
   }, [input, loading, isConfigured, messages, provider, apiKey, model, systemPrompt, activeConvId, pendingAttachments]);
 

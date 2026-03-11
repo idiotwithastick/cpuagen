@@ -53,6 +53,7 @@ interface DashboardData {
       cacheMisses: number;
       hitRate: number;
     };
+    spatialGridCells?: number;
     agf: {
       fullHits: number;
       basinHits: number;
@@ -476,6 +477,12 @@ export default function AdminDashboard() {
                     <span className="text-[#71717a]">Basin Index</span>
                     <span className="text-purple-400">{physics.teepLedger.basinIndexSize} mappings</span>
                   </div>
+                  {physics.spatialGridCells !== undefined && (
+                    <div className="flex justify-between text-[10px] font-mono">
+                      <span className="text-[#71717a]">Spatial Grid</span>
+                      <span className="text-cyan-400">{physics.spatialGridCells} cells (O(1) lookup)</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Recent TEEPs with content preview */}
