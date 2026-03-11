@@ -143,6 +143,45 @@ export default function AdminDashboard() {
         throw new Error(`HTTP ${res.status}`);
       }
       const d = await res.json();
+
+      // v12.1: Merge client-side metrics from localStorage
+      // Solves Vercel serverless isolation: /api/chat and /api/admin/stats
+      // run in different instances. Chat saves metrics via SSE → localStorage.
+      try {
+        const stored = localStorage.getItem("cpuagen-enforcement-metrics");
+        if (stored) {
+          const clientMetrics = JSON.parse(stored);
+          const m = clientMetrics.metrics;
+          if (m && d.physics) {
+            // Use client-side data if it has more TEEPs (server restarted = 0)
+            if (m.teepLedgerSize > (d.physics.teepLedger?.size || 0)) {
+              d.physics.teepLedger = {
+                size: m.teepLedgerSize,
+                basinIndexSize: m.basinIndexSize,
+                cacheHits: m.cacheHits,
+                cacheMisses: m.cacheMisses,
+                hitRate: m.hitRate,
+              };
+              d.physics.spatialGridCells = m.spatialGridCells;
+              d.physics.agf = m.agf;
+              if (m.morphic) d.physics.morphic = m.morphic;
+              if (m.psiState) d.physics.psiState = m.psiState;
+            }
+            // Always use client recent TEEPs if available (server has none)
+            if (clientMetrics.recentTeeps?.length > 0 &&
+                (!d.physics.recentTeeps || d.physics.recentTeeps.length === 0)) {
+              d.physics.recentTeeps = clientMetrics.recentTeeps;
+            }
+            // Update teepsCached in enforcement section too
+            if (m.teepLedgerSize > (d.enforcement?.teepsCached || 0)) {
+              d.enforcement.teepsCached = m.teepLedgerSize;
+            }
+          }
+        }
+      } catch {
+        // localStorage read failed, use server data as-is
+      }
+
       setData(d);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");

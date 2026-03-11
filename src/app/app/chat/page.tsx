@@ -526,19 +526,9 @@ export default function ChatPage() {
     }
     setHydrated(true);
 
-    // v12.0: Restore TEEP engine state from localStorage
-    try {
-      const teepSnapshot = localStorage.getItem("cpuagen-teep-state");
-      if (teepSnapshot) {
-        fetch("/api/teep", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: JSON.parse(teepSnapshot) }),
-        }).catch(() => {/* ignore */});
-      }
-    } catch {
-      // ignore
-    }
+    // v12.1: TEEP restore removed — Vercel serverless isolation means
+    // POST /api/teep goes to a different instance than /api/chat.
+    // Metrics now flow via SSE metrics_snapshot → localStorage → admin dashboard.
   }, []);
 
   // Persist conversations on change
@@ -979,6 +969,16 @@ export default function ChatPage() {
                     ),
                   );
                 }
+              } else if (parsed.type === "metrics_snapshot") {
+                // v12.1: Save enforcement metrics from same serverless instance
+                // Solves Vercel isolation: chat route sends metrics directly in SSE
+                try {
+                  localStorage.setItem("cpuagen-enforcement-metrics", JSON.stringify({
+                    metrics: parsed.metrics,
+                    recentTeeps: parsed.recentTeeps,
+                    timestamp: parsed.timestamp,
+                  }));
+                } catch {/* quota */}
               } else if (parsed.type === "error") {
                 throw new Error(parsed.message);
               }
@@ -1001,12 +1001,8 @@ export default function ChatPage() {
       );
     } finally {
       setLoading(false);
-      // v12.0: Auto-persist TEEP engine state after each response
-      fetch("/api/teep").then(r => r.json()).then(data => {
-        if (data.ok && data.snapshot) {
-          try { localStorage.setItem("cpuagen-teep-state", JSON.stringify(data.snapshot)); } catch {/* quota */}
-        }
-      }).catch(() => {/* ignore */});
+      // v12.1: Metrics now saved via metrics_snapshot SSE event (same instance)
+      // The old /api/teep fetch was broken due to Vercel serverless isolation
     }
   }, [input, loading, isConfigured, messages, provider, apiKey, model, systemPrompt, activeConvId, pendingAttachments]);
 

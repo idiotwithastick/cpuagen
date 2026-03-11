@@ -1,4 +1,4 @@
-import { thermosolve, cbfCheck, commitTeep, agfLookup } from "@/lib/enforcement";
+import { thermosolve, cbfCheck, commitTeep, agfLookup, getEnforcementMetrics, getRecentTeeps } from "@/lib/enforcement";
 import { recordEnforcementRequest, recordTeepCached } from "@/lib/security-state";
 
 export const runtime = "nodejs";
@@ -563,6 +563,28 @@ export async function POST(req: Request) {
           recordEnforcementRequest(true, undefined, requestIp, `AGF-${hitType}`);
           recordTeepCached(agfResult.teepId, requestIp);
 
+          // Metrics snapshot for cache hit path too
+          const hitMetrics = getEnforcementMetrics();
+          const hitTeeps = getRecentTeeps(10);
+          controller.enqueue(
+            encoder.encode(sseEvent({
+              type: "metrics_snapshot",
+              metrics: {
+                teepLedgerSize: hitMetrics.teepLedgerSize,
+                basinIndexSize: hitMetrics.basinIndexSize,
+                spatialGridCells: hitMetrics.spatialGridCells,
+                cacheHits: hitMetrics.cacheHits,
+                cacheMisses: hitMetrics.cacheMisses,
+                hitRate: hitMetrics.hitRate,
+                agf: hitMetrics.agf,
+                morphic: hitMetrics.morphic,
+                psiState: hitMetrics.psiState,
+              },
+              recentTeeps: hitTeeps,
+              timestamp: Date.now(),
+            })),
+          );
+
         } else {
           // === JIT SOLVE: Total miss — invoke LLM as physics solver ===
 
@@ -643,6 +665,30 @@ export async function POST(req: Request) {
             );
           }
         }
+
+        // === METRICS SNAPSHOT: Send full engine state to client for persistence ===
+        // This solves Vercel serverless isolation: /api/chat and /api/admin/stats
+        // run in separate instances. The client bridges the gap via localStorage.
+        const finalMetrics = getEnforcementMetrics();
+        const finalTeeps = getRecentTeeps(10);
+        controller.enqueue(
+          encoder.encode(sseEvent({
+            type: "metrics_snapshot",
+            metrics: {
+              teepLedgerSize: finalMetrics.teepLedgerSize,
+              basinIndexSize: finalMetrics.basinIndexSize,
+              spatialGridCells: finalMetrics.spatialGridCells,
+              cacheHits: finalMetrics.cacheHits,
+              cacheMisses: finalMetrics.cacheMisses,
+              hitRate: finalMetrics.hitRate,
+              agf: finalMetrics.agf,
+              morphic: finalMetrics.morphic,
+              psiState: finalMetrics.psiState,
+            },
+            recentTeeps: finalTeeps,
+            timestamp: Date.now(),
+          })),
+        );
 
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
