@@ -284,9 +284,10 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
 
           try {
             const parsed = JSON.parse(payload);
-            if (parsed.type === "pre-enforcement") {
+            if (parsed.type === "enforcement" && parsed.stage === "pre") {
               enforcement = { pre: { signature: parsed.signature, cbf: parsed.cbf } };
-            } else if (parsed.type === "post-enforcement") {
+              if (parsed.timing) enforcement.timing = parsed.timing;
+            } else if (parsed.type === "enforcement" && parsed.stage === "post") {
               if (enforcement) {
                 enforcement.post = { signature: parsed.signature, cbf: parsed.cbf, teepId: parsed.teepId };
                 if (parsed.timing) enforcement.timing = { ...enforcement.timing, ...parsed.timing };
@@ -303,7 +304,7 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
                   m.id === assistantId ? { ...m, content: fullContent } : m
                 ));
               }
-            } else if (parsed.type === "token" && parsed.content) {
+            } else if (parsed.type === "delta" && parsed.content) {
               fullContent += parsed.content;
               setMessages((prev) => prev.map((m) =>
                 m.id === assistantId ? { ...m, content: fullContent } : m
