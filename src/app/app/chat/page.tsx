@@ -715,6 +715,16 @@ export default function ChatPage() {
           if (prev.length >= FILE_LIMITS.maxFilesPerMessage) return prev;
           return [...prev, attachment];
         });
+        // Auto-open PDFs in Markup tab immediately
+        if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+          const binary = atob(dataUrl.split(",")[1]);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          setMarkupPdfData(bytes.buffer);
+          setMarkupPdfName(file.name);
+          setCanvasOpen(true);
+          setActiveTab("markup");
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -1382,8 +1392,49 @@ export default function ChatPage() {
           </button>
         </div>
         <div className="max-w-3xl mx-auto mt-2 flex items-center justify-between text-[10px] text-muted/70 font-mono">
-          <span>Enter to send {"\u00B7"} Shift+Enter for newline {"\u00B7"} Drop files to attach</span>
-          <span>Enforcement: ON {"\u00B7"} all barriers active {"\u00B7"} cache active</span>
+          <div className="flex items-center gap-2">
+            <span>Enter to send {"\u00B7"} Shift+Enter for newline</span>
+            <span className="text-border">|</span>
+            <select
+              onChange={(e) => {
+                if (e.target.value) {
+                  setCanvasLang(e.target.value);
+                  if (!canvasCode) setCanvasCode(`// ${e.target.value} workspace\n`);
+                  setCanvasOpen(true);
+                  setActiveTab("canvas");
+                  e.target.value = "";
+                }
+              }}
+              value=""
+              className="bg-transparent text-accent-light/70 hover:text-accent-light cursor-pointer border-none outline-none text-[10px] font-mono"
+              title="Open code canvas with language"
+            >
+              <option value="">Code</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+              <option value="python">Python</option>
+              <option value="html">HTML</option>
+              <option value="css">CSS</option>
+              <option value="rust">Rust</option>
+              <option value="go">Go</option>
+              <option value="sql">SQL</option>
+            </select>
+            <button
+              onClick={() => { setCanvasOpen(true); setActiveTab("markup"); }}
+              className="text-amber-400/70 hover:text-amber-400 cursor-pointer"
+              title="Open PDF markup"
+            >
+              Markup
+            </button>
+            <button
+              onClick={() => { setCanvasOpen(true); setActiveTab("preview"); }}
+              className="text-success/70 hover:text-success cursor-pointer"
+              title="Open live preview"
+            >
+              Preview
+            </button>
+          </div>
+          <span>Enforcement: ON {"\u00B7"} all barriers active</span>
         </div>
       </div>
     </div>{/* end chat pane */}

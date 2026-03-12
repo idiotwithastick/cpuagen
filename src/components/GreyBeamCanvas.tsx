@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import type { AnnotationType, PageAnnotations, MarkupState, StampType } from "@/lib/types";
 import { DrawEngine } from "@/lib/draw-engine";
 import { PdfRenderer } from "@/lib/pdf-renderer";
+import { PdfManager } from "@/lib/pdf-manager";
 
 /* ─── Props ─── */
 interface GreyBeamCanvasProps {
@@ -48,12 +49,19 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
   const [zoom, setZoom] = useState(1.0);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [pdfLoaded, setPdfLoaded] = useState(false);
+  const [showPageSidebar, setShowPageSidebar] = useState(true);
+  const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
+  const [dragOverPage, setDragOverPage] = useState<number | null>(null);
+  const [merging, setMerging] = useState(false);
+  // Store the raw PDF bytes for merge/delete/reorder operations
+  const [pdfBytes, setPdfBytes] = useState<ArrayBuffer | null>(null);
 
   const drawEngineRef = useRef<DrawEngine | null>(null);
   const pdfRendererRef = useRef<PdfRenderer | null>(null);
   const pdfCanvasRef = useRef<HTMLCanvasElement>(null);
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mergeInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Initialize engines
@@ -88,19 +96,21 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
   // Load PDF when pdfData changes
   useEffect(() => {
     if (!pdfData || !pdfRendererRef.current) return;
+    setPdfBytes(pdfData);
     const renderer = pdfRendererRef.current;
     renderer.setScale(zoom);
     renderer.loadPdf(pdfData).then((pages) => {
       setPageCount(pages);
       setCurrentPage(1);
       setPdfLoaded(true);
+      setSelectedPages(new Set());
     }).catch((err) => {
       console.error("Failed to load PDF:", err);
       setPdfLoaded(false);
     });
   }, [pdfData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Render current page — uses renderer.getPageCount() to avoid stale closure
+  // Render current page
   const renderPage = useCallback(async () => {
     const renderer = pdfRendererRef.current;
     const pdfCanvas = pdfCanvasRef.current;
@@ -142,27 +152,124 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
     }
   }, [currentPage, pageCount, pdfName, onStateExport]);
 
-  // File upload handler
-  const handleFileUpload = async (file: File) => {
-    if (!file.type.includes("pdf")) return;
-    const buffer = await file.arrayBuffer();
+  // Reload PDF from bytes (after merge/delete/reorder)
+  const reloadFromBytes = useCallback(async (bytes: ArrayBuffer, goToPage?: number) => {
+    setPdfBytes(bytes);
     const renderer = pdfRendererRef.current;
     if (!renderer) return;
     renderer.setScale(zoom);
     try {
-      const pages = await renderer.loadPdf(buffer);
+      const pages = await renderer.loadPdf(bytes);
       setPageCount(pages);
-      setCurrentPage(1);
+      const target = goToPage ? Math.min(goToPage, pages) : Math.min(currentPage, pages);
+      setCurrentPage(target < 1 ? 1 : target);
       setPdfLoaded(true);
+      setSelectedPages(new Set());
     } catch (err) {
-      console.error("Failed to load PDF:", err);
+      console.error("Failed to reload PDF:", err);
     }
+  }, [zoom, currentPage]);
+
+  // File upload handler
+  const handleFileUpload = async (file: File) => {
+    if (!file.type.includes("pdf")) return;
+    const buffer = await file.arrayBuffer();
+    await reloadFromBytes(buffer, 1);
+  };
+
+  // Merge additional PDFs
+  const handleMerge = async (files: FileList | File[]) => {
+    if (!pdfBytes) return;
+    setMerging(true);
+    try {
+      const newPdfs: ArrayBuffer[] = [];
+      for (const file of Array.from(files)) {
+        if (file.type.includes("pdf") || /\.pdf$/i.test(file.name)) {
+          newPdfs.push(await file.arrayBuffer());
+        }
+      }
+      if (newPdfs.length === 0) return;
+      const merged = await PdfManager.mergePdfs([pdfBytes, ...newPdfs]);
+      await reloadFromBytes(merged);
+    } catch (err) {
+      console.error("Merge failed:", err);
+    } finally {
+      setMerging(false);
+    }
+  };
+
+  // Delete selected pages
+  const handleDeletePages = async () => {
+    if (!pdfBytes || selectedPages.size === 0) return;
+    if (selectedPages.size >= pageCount) return; // Can't delete all pages
+    try {
+      // Convert 1-based page numbers to 0-based indices
+      const indices = Array.from(selectedPages).map((p) => p - 1);
+      const result = await PdfManager.deletePages(pdfBytes, indices);
+      await reloadFromBytes(result);
+    } catch (err) {
+      console.error("Delete pages failed:", err);
+    }
+  };
+
+  // Move page up (swap with previous)
+  const movePageUp = async (pageNum: number) => {
+    if (!pdfBytes || pageNum <= 1) return;
+    const order = Array.from({ length: pageCount }, (_, i) => i);
+    const idx = pageNum - 1;
+    [order[idx - 1], order[idx]] = [order[idx], order[idx - 1]];
+    try {
+      const result = await PdfManager.reorderPages(pdfBytes, order);
+      await reloadFromBytes(result, pageNum - 1);
+    } catch (err) {
+      console.error("Move page failed:", err);
+    }
+  };
+
+  // Move page down (swap with next)
+  const movePageDown = async (pageNum: number) => {
+    if (!pdfBytes || pageNum >= pageCount) return;
+    const order = Array.from({ length: pageCount }, (_, i) => i);
+    const idx = pageNum - 1;
+    [order[idx], order[idx + 1]] = [order[idx + 1], order[idx]];
+    try {
+      const result = await PdfManager.reorderPages(pdfBytes, order);
+      await reloadFromBytes(result, pageNum + 1);
+    } catch (err) {
+      console.error("Move page failed:", err);
+    }
+  };
+
+  // Download current PDF
+  const handleDownload = () => {
+    if (!pdfBytes) return;
+    PdfManager.download(pdfBytes, pdfName || "markup.pdf");
+  };
+
+  // Toggle page selection
+  const togglePageSelect = (pageNum: number) => {
+    setSelectedPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageNum)) next.delete(pageNum);
+      else next.add(pageNum);
+      return next;
+    });
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) handleFileUpload(file);
+    setDragOverPage(null);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      if (pdfLoaded && pdfBytes) {
+        // Merge dropped PDFs
+        handleMerge(files);
+      } else {
+        // First PDF
+        const file = files[0];
+        if (file) handleFileUpload(file);
+      }
+    }
   };
 
   // Page navigation
@@ -245,7 +352,7 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
           ))}
         </div>
 
-        {/* Color + Width + Stamp */}
+        {/* Color + Width + Stamp + Actions */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-0.5">
             {COLORS.map((c) => (
@@ -302,32 +409,160 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
           <button onClick={redo} className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground hover:bg-surface-light cursor-pointer" title="Redo">
             Redo
           </button>
-          <button onClick={clearPage} className="px-1.5 py-0.5 rounded text-[10px] font-mono text-danger/70 hover:text-danger hover:bg-danger/10 cursor-pointer" title="Clear page">
+          <button onClick={clearPage} className="px-1.5 py-0.5 rounded text-[10px] font-mono text-danger/70 hover:text-danger hover:bg-danger/10 cursor-pointer" title="Clear page annotations">
             Clear
+          </button>
+
+          <span className="text-border">|</span>
+
+          {/* Merge PDF button */}
+          <button
+            onClick={() => mergeInputRef.current?.click()}
+            disabled={merging}
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 cursor-pointer disabled:opacity-30"
+            title="Merge additional PDFs"
+          >
+            {merging ? "Merging..." : "+ Merge"}
+          </button>
+
+          {/* Delete selected pages */}
+          {selectedPages.size > 0 && selectedPages.size < pageCount && (
+            <button
+              onClick={handleDeletePages}
+              className="px-1.5 py-0.5 rounded text-[10px] font-mono text-danger/70 hover:text-danger hover:bg-danger/10 cursor-pointer"
+              title={`Delete ${selectedPages.size} selected page(s)`}
+            >
+              Delete ({selectedPages.size})
+            </button>
+          )}
+
+          {/* Toggle page sidebar */}
+          <button
+            onClick={() => setShowPageSidebar(!showPageSidebar)}
+            className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer ${
+              showPageSidebar ? "text-amber-400 bg-amber-500/10" : "text-muted hover:text-foreground hover:bg-surface-light"
+            }`}
+            title="Toggle page panel"
+          >
+            Pages
+          </button>
+
+          {/* Download */}
+          <button
+            onClick={handleDownload}
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground hover:bg-surface-light cursor-pointer"
+            title="Download PDF"
+          >
+            Save
           </button>
         </div>
       </div>
 
-      {/* Canvas area */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-auto flex items-start justify-center bg-[#1a1a2e] p-4"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleDrop}
-      >
-        <div className="relative inline-block" style={{ width: canvasSize.width || "auto", height: canvasSize.height || "auto" }}>
-          {/* PDF canvas (bottom layer) */}
-          <canvas
-            ref={pdfCanvasRef}
-            className="block"
-            style={{ backgroundColor: "white" }}
-          />
-          {/* Draw canvas (top layer, transparent overlay) */}
-          <canvas
-            ref={drawCanvasRef}
-            className="absolute top-0 left-0"
-            style={{ cursor: activeTool === "select" ? "default" : "crosshair" }}
-          />
+      {/* Main area: sidebar + canvas */}
+      <div className="flex-1 flex min-h-0">
+        {/* Page sidebar */}
+        {showPageSidebar && (
+          <div
+            className="w-32 shrink-0 border-r border-border bg-surface/20 overflow-y-auto"
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragOverPage(null);
+              const files = e.dataTransfer.files;
+              if (files.length > 0) handleMerge(files);
+            }}
+          >
+            <div className="p-1.5 space-y-1">
+              {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNum) => (
+                <div
+                  key={pageNum}
+                  className={`relative group rounded border cursor-pointer transition-all ${
+                    currentPage === pageNum
+                      ? "border-amber-500/50 bg-amber-500/10"
+                      : selectedPages.has(pageNum)
+                      ? "border-blue-500/40 bg-blue-500/10"
+                      : dragOverPage === pageNum
+                      ? "border-amber-400/60 bg-amber-500/20"
+                      : "border-border hover:border-border-light"
+                  }`}
+                  onClick={() => setCurrentPage(pageNum)}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverPage(pageNum); }}
+                  onDragLeave={() => setDragOverPage(null)}
+                >
+                  {/* Page number + checkbox */}
+                  <div className="flex items-center justify-between px-1.5 py-0.5">
+                    <span className="text-[9px] font-mono text-muted">{pageNum}</span>
+                    <div className="flex items-center gap-0.5">
+                      {/* Move up */}
+                      {pageNum > 1 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); movePageUp(pageNum); }}
+                          className="opacity-0 group-hover:opacity-100 text-[8px] text-muted hover:text-foreground cursor-pointer"
+                          title="Move up"
+                        >
+                          &#9650;
+                        </button>
+                      )}
+                      {/* Move down */}
+                      {pageNum < pageCount && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); movePageDown(pageNum); }}
+                          className="opacity-0 group-hover:opacity-100 text-[8px] text-muted hover:text-foreground cursor-pointer"
+                          title="Move down"
+                        >
+                          &#9660;
+                        </button>
+                      )}
+                      {/* Select checkbox */}
+                      <input
+                        type="checkbox"
+                        checked={selectedPages.has(pageNum)}
+                        onChange={(e) => { e.stopPropagation(); togglePageSelect(pageNum); }}
+                        className="w-3 h-3 accent-amber-500 cursor-pointer opacity-0 group-hover:opacity-100 checked:opacity-100"
+                        title="Select page"
+                      />
+                    </div>
+                  </div>
+                  {/* Mini preview area — placeholder colored block */}
+                  <div className="mx-1 mb-1 h-16 rounded-sm bg-white/80 flex items-center justify-center">
+                    <span className="text-[10px] text-gray-400 font-mono">{pageNum}</span>
+                  </div>
+                </div>
+              ))}
+
+              {/* Drop zone for merging */}
+              <div
+                className="border border-dashed border-border rounded p-2 text-center hover:border-amber-500/40 transition-colors cursor-pointer"
+                onClick={() => mergeInputRef.current?.click()}
+              >
+                <span className="text-[9px] text-muted">+ Add PDF</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Canvas area */}
+        <div
+          ref={containerRef}
+          className="flex-1 overflow-auto flex items-start justify-center bg-[#1a1a2e] p-4"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+        >
+          <div className="relative" style={canvasSize.width > 0 ? { width: canvasSize.width, height: canvasSize.height } : { width: "100%", height: "100%" }}>
+            {/* PDF canvas (bottom layer) */}
+            <canvas
+              ref={pdfCanvasRef}
+              className="block"
+              style={{ backgroundColor: "white" }}
+            />
+            {/* Draw canvas (top layer, transparent overlay) */}
+            <canvas
+              ref={drawCanvasRef}
+              className="absolute top-0 left-0"
+              style={{ cursor: activeTool === "select" ? "default" : "crosshair" }}
+            />
+          </div>
         </div>
       </div>
 
@@ -360,6 +595,29 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
           <button onClick={zoomIn} className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground cursor-pointer">+</button>
         </div>
       </div>
+
+      {/* Hidden file inputs */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFileUpload(file);
+        }}
+      />
+      <input
+        ref={mergeInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) handleMerge(e.target.files);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }
