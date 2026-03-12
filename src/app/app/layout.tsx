@@ -9,9 +9,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const nav = [
-    { href: "/app/chat", label: "Chat", active: pathname?.startsWith("/app/chat") },
-    { href: "/app/dev", label: "Dev Lab", active: pathname?.startsWith("/app/dev") },
-    { href: "/app/settings", label: "Settings", active: pathname?.startsWith("/app/settings") },
+    { href: "/app/chat", label: "Chat", icon: "\u{1F4AC}", active: pathname?.startsWith("/app/chat") },
+    { href: "/app/code", label: "Code", icon: "\u{1F4BB}", active: pathname?.startsWith("/app/code") },
+    { href: "/app/dev", label: "Dev Lab", icon: "\u{1F9EA}", active: pathname?.startsWith("/app/dev") },
+    { href: "/app/settings", label: "Settings", icon: "\u2699\uFE0F", active: pathname?.startsWith("/app/settings") },
   ];
 
   return (
@@ -51,7 +52,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               }`}
             >
               <span className="w-5 text-center">
-                {item.label === "Chat" ? "\u{1F4AC}" : item.label === "Dev Lab" ? "\u{1F9EA}" : "\u2699\uFE0F"}
+                {item.icon}
               </span>
               {item.label}
             </Link>
