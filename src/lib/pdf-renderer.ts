@@ -1,8 +1,8 @@
 import * as pdfjsLib from "pdfjs-dist";
 
-// Configure worker for Next.js (CDN fallback)
+// Configure worker for Next.js — unpkg has all versions (cdnjs lacks 5.5.207+)
 if (typeof window !== "undefined") {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 }
 
 export class PdfRenderer {

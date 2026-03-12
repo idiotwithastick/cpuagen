@@ -100,13 +100,14 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
     });
   }, [pdfData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Render current page
+  // Render current page — uses renderer.getPageCount() to avoid stale closure
   const renderPage = useCallback(async () => {
     const renderer = pdfRendererRef.current;
     const pdfCanvas = pdfCanvasRef.current;
     const drawCanvas = drawCanvasRef.current;
     const engine = drawEngineRef.current;
-    if (!renderer || !pdfCanvas || !drawCanvas || !engine || pageCount === 0) return;
+    if (!renderer || !pdfCanvas || !drawCanvas || !engine) return;
+    if (renderer.getPageCount() === 0) return;
 
     renderer.setScale(zoom);
     const { width, height } = await renderer.renderPage(currentPage, pdfCanvas);
@@ -121,7 +122,7 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
 
     // Bind draw engine to this page's canvas
     engine.bindCanvas(currentPage, drawCanvas);
-  }, [currentPage, pageCount, zoom]);
+  }, [currentPage, zoom]);
 
   useEffect(() => {
     if (pdfLoaded) renderPage();
