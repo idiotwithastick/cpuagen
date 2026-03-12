@@ -811,7 +811,7 @@ export type AgfResult =
   | { type: "BASIN_HIT"; content: string; teepId: string; signature: InternalSignature; distance: number }
   | { type: "JIT_SOLVE" };
 
-export function agfLookup(inputContent: string): AgfResult {
+export function agfLookup(inputContent: string, precomputedSig?: InternalSignature): AgfResult {
   const inputHash = fnv1aHash(inputContent.toLowerCase());
 
   // Step 1: Exact input hash lookup → O(1)
@@ -837,7 +837,8 @@ export function agfLookup(inputContent: string): AgfResult {
   }
 
   // Step 2: v12.0 Spatial Hash Grid basin proximity search — O(1) expected
-  const inputSig = thermosolve(inputContent);
+  // Reuse pre-computed signature from pre-enforcement (avoid double thermosolve)
+  const inputSig = precomputedSig || thermosolve(inputContent);
   const threshold = getBasinThreshold(inputSig); // v13.0: curvature-adaptive
   const adjacentKeys = getAdjacentKeys(inputSig);
 
@@ -1583,18 +1584,45 @@ export function getHolographicProjection(maxPoints = 100): {
 // ENFORCEMENT METRICS — For admin dashboard
 // ========================================================================
 
+// Cached metrics to avoid recomputing on every request
+let cachedMetricsTimestamp = 0;
+let cachedTotalMass = 0;
+let cachedHeaviestMass = 0;
+let cachedTotalResonance = 0;
+const METRICS_CACHE_TTL = 5000; // Refresh every 5 seconds max
+
 export function getEnforcementMetrics() {
-  let totalMass = 0;
-  let heaviestMass = 0;
-  let totalResonance = 0;
-  for (const teep of teepLedger.values()) {
-    totalMass += teep.semanticMass;
-    if (teep.semanticMass > heaviestMass) heaviestMass = teep.semanticMass;
-    totalResonance += teep.resonanceStrength;
+  const now = Date.now();
+  let totalMass = cachedTotalMass;
+  let heaviestMass = cachedHeaviestMass;
+  let totalResonance = cachedTotalResonance;
+
+  // Only recompute expensive iteration if cache expired
+  if (now - cachedMetricsTimestamp > METRICS_CACHE_TTL) {
+    totalMass = 0;
+    heaviestMass = 0;
+    totalResonance = 0;
+    for (const teep of teepLedger.values()) {
+      totalMass += teep.semanticMass;
+      if (teep.semanticMass > heaviestMass) heaviestMass = teep.semanticMass;
+      totalResonance += teep.resonanceStrength;
+    }
+    cachedTotalMass = totalMass;
+    cachedHeaviestMass = heaviestMass;
+    cachedTotalResonance = totalResonance;
+    cachedMetricsTimestamp = now;
   }
 
-  const coverage = getManifoldCoverage();
+  // Fisher coherence is a lightweight computation (7×7 matrix)
   const fisherCoherence = getQuantumFisherCoherence();
+
+  // Manifold coverage: lightweight — just set size + simple count
+  const coverageData = {
+    visitedCells: visitedCells.size,
+    totalPossibleCells: Math.pow(GRID_RESOLUTION, 5),
+    coverageRatio: round4(visitedCells.size / Math.pow(GRID_RESOLUTION, 5)),
+    trajectoryLength: trajectoryMemory.length,
+  };
 
   return {
     version: "13.0",
@@ -1634,7 +1662,7 @@ export function getEnforcementMetrics() {
         topCorrelations: fisherCoherence.topCorrelations,
         sampleCount: fisherSampleCount,
       },
-      manifoldCoverage: coverage,
+      manifoldCoverage: coverageData,
       machDiamondCount: machDiamondHistory.filter(m => m.count >= 3).length,
       trajectoryLength: trajectoryMemory.length,
     },

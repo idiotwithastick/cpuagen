@@ -534,8 +534,15 @@ export async function POST(req: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // PRE-ENFORCEMENT
-        const preSig = thermosolve(lastUserMsg?.content || "");
+        // ============================================================
+        // UNIFIED PRE-ENFORCEMENT + AGF LOOKUP (single thermosolve)
+        // ============================================================
+        // Thermosolve once, reuse for both CBF check and AGF lookup.
+        // Previous: thermosolve called TWICE (pre-enforcement + inside agfLookup).
+        // Now: thermosolve called ONCE, signature passed to agfLookup.
+        // ============================================================
+        const userInput = lastUserMsg?.content || "";
+        const preSig = thermosolve(userInput);
         const preCbf = cbfCheck(preSig);
 
         // Record pre-enforcement to admin dashboard
@@ -583,8 +590,7 @@ export async function POST(req: Request) {
         // 2. BASIN_HIT → similar input in same basin → serve nearest solve (NO LLM CALL)
         // 3. JIT_SOLVE → total miss → invoke LLM as JIT physics solver
         // ============================================================
-        const userInput = lastUserMsg?.content || "";
-        const agfResult = agfLookup(userInput);
+        const agfResult = agfLookup(userInput, preSig);
 
         if (agfResult.type === "FULL_HIT" || agfResult.type === "BASIN_HIT") {
           // === CACHE HIT: Serve solved basin directly — NO API CALL ===
@@ -634,27 +640,7 @@ export async function POST(req: Request) {
           recordEnforcementRequest(true, undefined, requestIp, `AGF-${hitType}`);
           recordTeepCached(agfResult.teepId, requestIp);
 
-          // Metrics snapshot for cache hit path too
-          const hitMetrics = getEnforcementMetrics();
-          const hitTeeps = getRecentTeeps(10);
-          controller.enqueue(
-            encoder.encode(sseEvent({
-              type: "metrics_snapshot",
-              metrics: {
-                teepLedgerSize: hitMetrics.teepLedgerSize,
-                basinIndexSize: hitMetrics.basinIndexSize,
-                spatialGridCells: hitMetrics.spatialGridCells,
-                cacheHits: hitMetrics.cacheHits,
-                cacheMisses: hitMetrics.cacheMisses,
-                hitRate: hitMetrics.hitRate,
-                agf: hitMetrics.agf,
-                morphic: hitMetrics.morphic,
-                psiState: hitMetrics.psiState,
-              },
-              recentTeeps: hitTeeps,
-              timestamp: Date.now(),
-            })),
-          );
+          // Metrics snapshot sent at end (shared with JIT path)
 
         } else {
           // === JIT SOLVE: Total miss — invoke LLM as physics solver ===
