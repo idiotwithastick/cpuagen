@@ -246,6 +246,14 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
                 </span>
               </>
             )}
+            {enforcement.agfHitType && (
+              <>
+                <span className="text-muted">|</span>
+                <span className={enforcement.agfHitType === "FULL_HIT" ? "text-success" : enforcement.agfHitType === "PARTIAL_HIT" ? "text-accent-light" : "text-muted"}>
+                  {enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHE" : enforcement.agfHitType === "PARTIAL_HIT" ? "\u{1F50C} BRIDGE" : "\u{1F9EA} JIT"}
+                </span>
+              </>
+            )}
           </div>
           <button
             onClick={() => setExpanded(!expanded)}
@@ -274,6 +282,47 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
             </span>
           )}
         </div>
+
+        {/* Performance timing — always visible when available */}
+        {enforcement.timing && (
+          <div className="mt-1.5 pt-1.5 border-t border-current/10">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+              {enforcement.timing.total_enforcement_ms !== undefined && (
+                <span className={allSafe ? "text-success font-semibold" : "text-danger font-semibold"}>
+                  Enforcement: {enforcement.timing.total_enforcement_ms}ms
+                </span>
+              )}
+              {enforcement.timing.llm_ms !== undefined && (
+                <span className="text-foreground">
+                  LLM: {enforcement.timing.llm_ms === 0 ? (
+                    <span className="text-success">0ms (CACHE HIT)</span>
+                  ) : (
+                    <span>{enforcement.timing.llm_ms.toLocaleString()}ms</span>
+                  )}
+                </span>
+              )}
+              {enforcement.timing.total_ms !== undefined && (
+                <span className="text-foreground font-semibold">
+                  Total: {enforcement.timing.total_ms.toLocaleString()}ms
+                </span>
+              )}
+            </div>
+            {enforcement.timing.total_ms !== undefined && (
+              <div className="mt-1 text-[9px]">
+                <span className="text-muted">vs Traditional LLM (~2,500ms): </span>
+                {enforcement.timing.total_ms < 2500 ? (
+                  <span className="text-success font-semibold">
+                    {((2500 / Math.max(enforcement.timing.total_ms, 1))).toFixed(1)}x faster
+                  </span>
+                ) : (
+                  <span className="text-muted">
+                    {(enforcement.timing.total_ms / 2500).toFixed(1)}x (JIT solve + enforcement)
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* TEEP cache line — always visible when available */}
         {post?.teepId && (
@@ -1032,12 +1081,21 @@ export default function ChatPage() {
                     m.id === assistantId ? { ...m, content: fullContent } : m,
                   ),
                 );
+              } else if (parsed.type === "agf") {
+                // AGF cache hit/miss event with timing
+                enforcement.agfHitType = parsed.hitType;
+                if (parsed.timing) {
+                  enforcement.timing = parsed.timing;
+                }
               } else if (parsed.type === "enforcement") {
                 if (parsed.stage === "pre") {
                   enforcement.pre = {
                     signature: parsed.signature,
                     cbf: parsed.cbf,
                   };
+                  if (parsed.timing) {
+                    enforcement.timing = { ...enforcement.timing, ...parsed.timing };
+                  }
                   // Show input enforcement on the user message
                   const inputEnforcement: EnforcementResult = { pre: enforcement.pre };
                   setMessages((prev) =>
@@ -1053,6 +1111,12 @@ export default function ChatPage() {
                     cbf: parsed.cbf,
                     teepId: parsed.teepId,
                   };
+                  if (parsed.timing) {
+                    enforcement.timing = { ...enforcement.timing, ...parsed.timing };
+                  }
+                  if (parsed.agfHitType) {
+                    enforcement.agfHitType = parsed.agfHitType;
+                  }
                 }
                 if (enforcement.pre) {
                   setMessages((prev) =>
