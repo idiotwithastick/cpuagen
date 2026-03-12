@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const SITE_PASSWORD = process.env.SITE_PASSWORD || "026F3AA3A";
+const SITE_PASSWORD = (process.env.SITE_PASSWORD || "026F3AA3A").trim();
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
