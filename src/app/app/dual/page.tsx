@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { EnforcementResult, Settings, ApiKeys } from "@/lib/types";
 import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS } from "@/lib/types";
+import { getDualContext } from "@/lib/system-context";
 
 /* ─── Types ─── */
 interface DualMessage {
@@ -222,9 +223,7 @@ export default function DualPage() {
     }]);
 
     const contextMsgs = buildContext(panel, userText);
-    const systemPrompt = `You are CPUAGEN Dual Mode — ${panel.toUpperCase()} panel. You are working collaboratively with another AI in the other panel. Both panels share context.
-
-Be concise and direct. When you see messages prefixed with [LEFT] or [RIGHT], those indicate which panel they came from.
+    const systemPrompt = `${getDualContext(panel)}
 ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` : ""}`;
 
     const controller = new AbortController();

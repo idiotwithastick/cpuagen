@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { EnforcementResult, Settings, ApiKeys } from "@/lib/types";
 import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS } from "@/lib/types";
+import { getCodeContext } from "@/lib/system-context";
 
 /* ─── Types ─── */
 interface VirtualFile {
@@ -303,17 +304,8 @@ export default function CodePage() {
     const model = settings.activeModel;
     const apiKey = provider !== "demo" ? settings.apiKeys[provider as keyof ApiKeys] || "" : "";
 
-    const systemPrompt = `You are CPUAGEN Code, an expert coding assistant. You write clean, efficient, well-documented code.
-
-RULES:
-- When generating or modifying code, ALWAYS wrap it in a fenced code block with the language and filename: \`\`\`language filename.ext
-- When editing an existing file, output the COMPLETE updated file content (not just the changed parts)
-- Be concise in explanations. Focus on the code.
-- If asked to create a new file, name it appropriately and provide complete content.
-- If asked to refactor, show the full refactored file.
-- One code block per file. Multiple files = multiple code blocks.
-
-${settings.systemPrompt ? `Additional instructions: ${settings.systemPrompt}` : ""}`;
+    const systemPrompt = `${getCodeContext()}
+${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` : ""}`;
 
     const controller = new AbortController();
     abortRef.current = controller;
