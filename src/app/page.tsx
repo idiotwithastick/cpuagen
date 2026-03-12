@@ -406,19 +406,19 @@ export default function Home() {
               icon={"\uD83C\uDF10"}
               title="Bring Any LLM"
               description="Claude, GPT-4o, Gemini, Grok, Llama. Plug in your API key. CPUAGEN enforces the same validation on all of them."
-              metric={"5+ providers \u00B7 13+ models"}
+              metric="5+ providers · 13+ models"
             />
             <FeatureCard
               icon={"\uD83D\uDD2C"}
               title="Multi-Dimensional Indexing"
               description="Advanced spatial indexing reduces knowledge lookup complexity by 9x. Queries find validated answers through intelligent multi-pass retrieval."
-              metric="9x faster lookups \u00B7 v14.0"
+              metric="9x faster lookups · v14.0"
             />
             <FeatureCard
               icon={"\uD83D\uDE80"}
               title="Accelerated Inference"
               description="3-stage algebraic optimization pre-conditions queries for faster convergence. Cache-first protocol ensures the AI is only called when necessary."
-              metric="0ms for cached \u00B7 O(1) lookup"
+              metric="0ms for cached · O(1) lookup"
             />
             <FeatureCard
               icon={"\uD83D\uDCCA"}
@@ -436,7 +436,7 @@ export default function Home() {
               icon={"\uD83D\uDEE0\uFE0F"}
               title="Code + Workspace"
               description={"Full IDE in the browser. Chat, code canvas, PDF markup, and dev lab \u2014 all through the enforcement layer. Agentic coding mode coming soon."}
-              metric={"Chat \u00B7 Dev Lab \u00B7 Code \u00B7 Dual"}
+              metric="Chat · Dev Lab · Code · Dual"
             />
           </div>
         </div>
