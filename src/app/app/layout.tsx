@@ -11,6 +11,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const nav = [
     { href: "/app/chat", label: "Chat", icon: "\u{1F4AC}", active: pathname?.startsWith("/app/chat") },
     { href: "/app/code", label: "Code", icon: "\u{1F4BB}", active: pathname?.startsWith("/app/code") },
+    { href: "/app/dual", label: "Dual", icon: "\u{1F91D}", active: pathname?.startsWith("/app/dual") },
     { href: "/app/dev", label: "Dev Lab", icon: "\u{1F9EA}", active: pathname?.startsWith("/app/dev") },
     { href: "/app/settings", label: "Settings", icon: "\u2699\uFE0F", active: pathname?.startsWith("/app/settings") },
   ];
