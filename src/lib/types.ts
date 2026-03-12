@@ -105,9 +105,20 @@ export interface EnforcementStage {
   teepId?: string;
 }
 
+export interface PerformanceTiming {
+  thermosolve_ms?: number;
+  cbf_ms?: number;
+  agf_lookup_ms?: number;
+  total_enforcement_ms?: number;
+  llm_ms?: number;
+  total_ms?: number;
+}
+
 export interface EnforcementResult {
   pre: EnforcementStage;
   post?: EnforcementStage;
+  agfHitType?: string;
+  timing?: PerformanceTiming;
 }
 
 export interface Conversation {

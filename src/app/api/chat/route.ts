@@ -542,8 +542,11 @@ export async function POST(req: Request) {
         // Now: thermosolve called ONCE, signature passed to agfLookup.
         // ============================================================
         const userInput = lastUserMsg?.content || "";
+        const t0 = Date.now();
         const preSig = thermosolve(userInput);
+        const t1 = Date.now();
         const preCbf = cbfCheck(preSig);
+        const t2 = Date.now();
 
         // Record pre-enforcement to admin dashboard
         const failedPre = Object.entries(preCbf)
@@ -568,6 +571,7 @@ export async function POST(req: Request) {
               cache_hit: preSig.cache_hit,
             },
             cbf: sanitizeCbf(preCbf),
+            timing: { thermosolve_ms: t1 - t0, cbf_ms: t2 - t1, total_pre_ms: t2 - t0 },
           })),
         );
 
@@ -590,7 +594,9 @@ export async function POST(req: Request) {
         // 2. BASIN_HIT → similar input in same basin → serve nearest solve (NO LLM CALL)
         // 3. JIT_SOLVE → total miss → invoke LLM as JIT physics solver
         // ============================================================
+        const t3 = Date.now();
         const agfResult = agfLookup(userInput, preSig);
+        const t4 = Date.now();
 
         if (agfResult.type === "FULL_HIT" || agfResult.type === "BASIN_HIT") {
           // === CACHE HIT: Serve solved basin directly — NO API CALL ===
@@ -604,6 +610,14 @@ export async function POST(req: Request) {
               hitType,
               teepId: agfResult.teepId,
               distance: "distance" in agfResult ? agfResult.distance : 0,
+              timing: {
+                thermosolve_ms: t1 - t0,
+                cbf_ms: t2 - t1,
+                agf_lookup_ms: t4 - t3,
+                total_enforcement_ms: t4 - t0,
+                llm_ms: 0, // No LLM call on cache hit
+                total_ms: Date.now() - t0,
+              },
             })),
           );
 
@@ -663,6 +677,7 @@ export async function POST(req: Request) {
           const cannonSig = cannonCondition(preSig);
 
           // Send AGF miss notification with cannon stats
+          const tJitStart = Date.now();
           controller.enqueue(
             encoder.encode(sseEvent({
               type: "agf",
@@ -670,6 +685,12 @@ export async function POST(req: Request) {
               cannonApplied: true,
               cannonPhi: cannonSig.phi,
               cannonS: cannonSig.S,
+              timing: {
+                thermosolve_ms: t1 - t0,
+                cbf_ms: t2 - t1,
+                agf_lookup_ms: t4 - t3,
+                total_enforcement_ms: t4 - t0,
+              },
             })),
           );
 
@@ -726,6 +747,13 @@ export async function POST(req: Request) {
                 cbf: sanitizeCbf(postCbf),
                 teepId,
                 agfHitType: "JIT_SOLVE",
+                timing: {
+                  thermosolve_ms: t1 - t0,
+                  cbf_ms: t2 - t1,
+                  agf_lookup_ms: t4 - t3,
+                  llm_ms: Date.now() - tJitStart,
+                  total_ms: Date.now() - t0,
+                },
               })),
             );
           }
