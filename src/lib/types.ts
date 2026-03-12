@@ -78,6 +78,9 @@ export interface Message {
   timestamp: number;
   enforcement?: EnforcementResult;
   attachments?: FileAttachment[];
+  // v14.0: Canvas edit flag — messages marked as canvas edits are hidden/compact in chat
+  canvasEdit?: boolean;
+  canvasInstruction?: string; // Original user instruction (not the full code prompt)
 }
 
 export interface ValidationSignature {

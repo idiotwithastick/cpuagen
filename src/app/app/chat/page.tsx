@@ -831,9 +831,13 @@ export default function ChatPage() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const isCanvasEditRef = useRef(false);
 
+  // v14.0: Store the original canvas instruction for compact display
+  const canvasInstructionRef = useRef<string>("");
+
   const handleCanvasInstruction = useCallback((instruction: string, code: string) => {
     const prompt = `[CANVAS EDIT REQUEST] Here is the current code in the Canvas editor. Please provide the complete updated code (not a diff):\n\n\`\`\`${canvasLang}\n${code}\n\`\`\`\n\n${instruction}`;
     isCanvasEditRef.current = true;
+    canvasInstructionRef.current = instruction;
     sendMessageRef.current(prompt);
   }, [canvasLang]);
 
@@ -853,12 +857,17 @@ export default function ChatPage() {
     const msgAttachments = pendingAttachments.length > 0 ? [...pendingAttachments] : undefined;
     setPendingAttachments([]);
 
+    // v14.0: Mark canvas edit messages for compact display / hiding
+    const isCanvas = isCanvasEditRef.current;
+
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: "user",
       content: text.trim(),
       timestamp: Date.now(),
       attachments: msgAttachments,
+      canvasEdit: isCanvas || undefined,
+      canvasInstruction: isCanvas ? canvasInstructionRef.current : undefined,
     };
 
     const assistantId = crypto.randomUUID();
@@ -867,6 +876,7 @@ export default function ChatPage() {
       role: "assistant",
       content: "",
       timestamp: Date.now(),
+      canvasEdit: isCanvas || undefined,
     };
 
     // If no active conversation, start one
@@ -1315,9 +1325,23 @@ export default function ChatPage() {
             </div>
           </div>
         )}
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} onOpenCanvas={openCanvas} onOpenPreview={openPreview} onOpenInMarkup={openInMarkup} onAnnotationCommand={handleAnnotationCommand} />
-        ))}
+        {messages.map((msg) => {
+          // v14.0: Hide assistant canvas edit responses (content goes to canvas, not chat)
+          if (msg.canvasEdit && msg.role === "assistant") return null;
+          // v14.0: Show compact indicator for user canvas edit messages
+          if (msg.canvasEdit && msg.role === "user") {
+            return (
+              <div key={msg.id} className="flex justify-end mb-2 px-4">
+                <div className="bg-accent/20 text-accent border border-accent/30 rounded-lg px-3 py-1.5 text-xs flex items-center gap-1.5 max-w-[70%]">
+                  <span className="opacity-60">🎨</span>
+                  <span className="font-medium">Canvas edit:</span>
+                  <span className="truncate">{msg.canvasInstruction || "editing..."}</span>
+                </div>
+              </div>
+            );
+          }
+          return <MessageBubble key={msg.id} message={msg} onOpenCanvas={openCanvas} onOpenPreview={openPreview} onOpenInMarkup={openInMarkup} onAnnotationCommand={handleAnnotationCommand} />;
+        })}
         <div ref={messagesEndRef} />
       </div>
 

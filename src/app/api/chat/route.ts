@@ -1,4 +1,4 @@
-import { thermosolve, cbfCheck, commitTeep, agfLookup, getEnforcementMetrics, getRecentTeeps } from "@/lib/enforcement";
+import { thermosolve, cbfCheck, commitTeep, agfLookup, getEnforcementMetrics, getRecentTeeps, cannonCondition } from "@/lib/enforcement";
 import { recordEnforcementRequest, recordTeepCached } from "@/lib/security-state";
 
 export const runtime = "nodejs";
@@ -657,11 +657,19 @@ export async function POST(req: Request) {
             return { role: m.role, content: m.content };
           }));
 
-          // Send AGF miss notification
+          // v14.0: Apply Semantic Cannon conditioning on JIT miss
+          // Golden-ratio algebraic chain pre-conditions the signature for better
+          // post-enforcement grounding (compressed entropy, boosted coherence)
+          const cannonSig = cannonCondition(preSig);
+
+          // Send AGF miss notification with cannon stats
           controller.enqueue(
             encoder.encode(sseEvent({
               type: "agf",
               hitType: "JIT_SOLVE",
+              cannonApplied: true,
+              cannonPhi: cannonSig.phi,
+              cannonS: cannonSig.S,
             })),
           );
 

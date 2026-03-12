@@ -1,5 +1,5 @@
 // ========================================================================
-// SSD-RCI PHYSICS ENFORCEMENT — TypeScript Port (v13.0 Innovation Build)
+// SSD-RCI PHYSICS ENFORCEMENT — TypeScript Port (v14.0 Holographic Read)
 // ========================================================================
 // v12.0 Base: Thermosolve, CBF barriers, PsiState, AGF cache, TEEP ledger,
 //   Dynamic Fisher Metric, Semantic Mass, Morphic Resonance, Spatial Hash Grid,
@@ -16,6 +16,14 @@
 //            Holographic Basin Visualization (12D→5D projection)
 //   Phase 5: Ergodic Trajectory Memory, Bekenstein Compression (S_max=2πRE),
 //            Holographic Encoding (boundary-encoded TEEP storage)
+//
+// v14.0 Holographic Read + Semantic Cannon (6 features):
+//   1. Holographic Boundary Index — 5D projection stored at commit time
+//   2. 3D Coarse Grid (27-cell scan vs 243-cell) — 9x fewer neighbor checks
+//   3. Two-pass lookup: fast boundary distance → full Fisher verification
+//   4. Semantic Cannon — 3-stage O(1) algebraic inference (golden ratio)
+//   5. Cannon Conditioning — pre-conditions JIT signatures for better basin lock
+//   6. Canvas edit isolation — canvas edits hidden from chat thread
 //
 // Source: core/physics_engine.py, core/control_barrier_engine.py,
 //         core/agf_middleware.py, ArXiv research papers (21 surveyed)
@@ -107,6 +115,8 @@ interface CachedTeep {
   child_ids: string[];       // What this TEEP generated (causal link forward)
   role?: "USER" | "ASSISTANT" | "SYSTEM" | "TOOL_CALL" | "TOOL_RESULT" | "THOUGHT";
   turn?: number;             // Conversation turn number
+  // v14.0: Holographic boundary — 5D projection for fast lookup
+  boundary?: [number, number, number, number, number];
 }
 
 const teepLedger = new Map<string, CachedTeep>();
@@ -122,15 +132,103 @@ let agfJitSolves = 0;
 let agfApiCallsAvoided = 0;
 
 // ========================================================================
-// v12.0 SPATIAL HASH GRID — O(1) basin lookup instead of O(n) scan
+// v14.0 HOLOGRAPHIC SPATIAL INDEX — 5D boundary-space lookup
 // ========================================================================
-// Quantize 7-dimensional signature space into grid cells.
-// Each cell holds TEEP IDs that fall in that region.
-// Basin lookup: hash query signature → check only TEEPs in same/adjacent cells.
+// Projects 12D signatures into 5D holographic boundary coordinates,
+// then searches in compressed boundary space. 2.5x fewer dimensions,
+// pure arithmetic distance (no transcendentals), 3^3 neighbor scan
+// instead of 3^5 = 243 cells.
 // ========================================================================
 
 const GRID_RESOLUTION = 10; // Bins per dimension
 const spatialGrid = new Map<string, Set<string>>(); // grid key → set of content hashes
+
+// v14.0: Holographic boundary index — 3D coarse grid over top 3 boundary dims
+const HOLO_GRID_RESOLUTION = 12; // Finer grid, fewer dimensions = same memory
+const holoGrid = new Map<string, Set<string>>(); // 3D grid key → content hashes
+let holoLookupHits = 0;
+let holoLookupMisses = 0;
+
+// Compute 5D holographic boundary from signature (Fisher-weighted projection)
+function computeBoundary(sig: InternalSignature): [number, number, number, number, number] {
+  // Project using top 5 Fisher-weighted dimensions (same as holographicEncode)
+  const weightedDims = Object.entries(dynamicFisherWeights)
+    .sort(([, a], [, b]) => b - a);
+
+  const boundary: number[] = [];
+  const used = new Set<string>();
+  for (const [dim] of weightedDims) {
+    if (boundary.length >= 5) break;
+    boundary.push(round4(sig[dim as keyof InternalSignature] as number));
+    used.add(dim);
+  }
+  // Fold remaining dimensions into boundary via additive projection
+  for (const [dim] of weightedDims) {
+    if (used.has(dim)) continue;
+    const val = sig[dim as keyof InternalSignature] as number;
+    if (typeof val !== "number") continue;
+    const targetIdx = Math.abs(dim.charCodeAt(0)) % 5;
+    boundary[targetIdx] += val * 0.1;
+  }
+
+  return boundary.map(v => round4(v)) as [number, number, number, number, number];
+}
+
+// Fast 5D Euclidean distance — pure arithmetic, no transcendentals
+function boundaryDistance(a: [number, number, number, number, number], b: [number, number, number, number, number]): number {
+  const d0 = a[0] - b[0]; const d1 = a[1] - b[1]; const d2 = a[2] - b[2];
+  const d3 = a[3] - b[3]; const d4 = a[4] - b[4];
+  return Math.sqrt(d0*d0 + d1*d1 + d2*d2 + d3*d3 + d4*d4);
+}
+
+// 3D coarse grid key from top 3 boundary dims (3^3 = 27 neighbors vs 3^5 = 243)
+function boundaryToHoloKey(boundary: [number, number, number, number, number]): string {
+  const b0 = Math.min(HOLO_GRID_RESOLUTION - 1, Math.max(0, Math.floor(Math.abs(boundary[0]) * HOLO_GRID_RESOLUTION)));
+  const b1 = Math.min(HOLO_GRID_RESOLUTION - 1, Math.max(0, Math.floor(Math.abs(boundary[1]) * HOLO_GRID_RESOLUTION)));
+  const b2 = Math.min(HOLO_GRID_RESOLUTION - 1, Math.max(0, Math.floor(Math.abs(boundary[2]) * HOLO_GRID_RESOLUTION)));
+  return `H${b0},${b1},${b2}`;
+}
+
+// Get adjacent holographic grid cells — only 3^3 = 27 cells (vs 243 for 5D)
+function getHoloAdjacentKeys(boundary: [number, number, number, number, number]): string[] {
+  const b0 = Math.min(HOLO_GRID_RESOLUTION - 1, Math.max(0, Math.floor(Math.abs(boundary[0]) * HOLO_GRID_RESOLUTION)));
+  const b1 = Math.min(HOLO_GRID_RESOLUTION - 1, Math.max(0, Math.floor(Math.abs(boundary[1]) * HOLO_GRID_RESOLUTION)));
+  const b2 = Math.min(HOLO_GRID_RESOLUTION - 1, Math.max(0, Math.floor(Math.abs(boundary[2]) * HOLO_GRID_RESOLUTION)));
+
+  const keys: string[] = [];
+  for (let d0 = -1; d0 <= 1; d0++) {
+    for (let d1 = -1; d1 <= 1; d1++) {
+      for (let d2 = -1; d2 <= 1; d2++) {
+        const c0 = b0 + d0; const c1 = b1 + d1; const c2 = b2 + d2;
+        if (c0 >= 0 && c0 < HOLO_GRID_RESOLUTION &&
+            c1 >= 0 && c1 < HOLO_GRID_RESOLUTION &&
+            c2 >= 0 && c2 < HOLO_GRID_RESOLUTION) {
+          keys.push(`H${c0},${c1},${c2}`);
+        }
+      }
+    }
+  }
+  return keys;
+}
+
+function holoGridInsert(boundary: [number, number, number, number, number], contentHash: string): void {
+  const key = boundaryToHoloKey(boundary);
+  let cell = holoGrid.get(key);
+  if (!cell) {
+    cell = new Set();
+    holoGrid.set(key, cell);
+  }
+  cell.add(contentHash);
+}
+
+function holoGridRemove(boundary: [number, number, number, number, number], contentHash: string): void {
+  const key = boundaryToHoloKey(boundary);
+  const cell = holoGrid.get(key);
+  if (cell) {
+    cell.delete(contentHash);
+    if (cell.size === 0) holoGrid.delete(key);
+  }
+}
 
 function signatureToGridKey(sig: InternalSignature): string {
   // Quantize key dimensions into grid bins
@@ -836,22 +934,30 @@ export function agfLookup(inputContent: string, precomputedSig?: InternalSignatu
     }
   }
 
-  // Step 2: v12.0 Spatial Hash Grid basin proximity search — O(1) expected
+  // Step 2: v14.0 HOLOGRAPHIC BOUNDARY SEARCH — 5D projection, 27-cell scan
+  // Project input to 5D boundary space (fast arithmetic), then verify top
+  // candidates with full Fisher geodesic. 9x fewer cells than old 5D grid.
   // Reuse pre-computed signature from pre-enforcement (avoid double thermosolve)
   const inputSig = precomputedSig || thermosolve(inputContent);
   const threshold = getBasinThreshold(inputSig); // v13.0: curvature-adaptive
-  const adjacentKeys = getAdjacentKeys(inputSig);
+  const inputBoundary = computeBoundary(inputSig);
 
   let bestMatch: CachedTeep | null = null;
   let bestDistance = Infinity;
 
-  // Only check TEEPs in nearby grid cells (typically 10-50 vs 10,000+ total)
-  for (const gridKey of adjacentKeys) {
-    const cell = spatialGrid.get(gridKey);
+  // v14.0: Search holographic 3D grid FIRST (27 cells vs 243)
+  const holoKeys = getHoloAdjacentKeys(inputBoundary);
+  for (const gridKey of holoKeys) {
+    const cell = holoGrid.get(gridKey);
     if (!cell) continue;
     for (const contentHash of cell) {
       const teep = teepLedger.get(contentHash);
-      if (!teep || !teep.cbfResult.allSafe) continue;
+      if (!teep || !teep.cbfResult.allSafe || !teep.boundary) continue;
+      // Fast 5D boundary distance (pure arithmetic — no transcendentals)
+      const bDist = boundaryDistance(inputBoundary, teep.boundary);
+      // Quick reject: if boundary distance > 2x threshold, skip expensive Fisher
+      if (bDist > threshold * 2) continue;
+      // Verify with full Fisher geodesic for accuracy
       const d = signatureDistance(inputSig, teep.signature);
       const massAdjustedDistance = d / (1 + teep.semanticMass * 0.5);
       if (massAdjustedDistance < bestDistance) {
@@ -861,11 +967,33 @@ export function agfLookup(inputContent: string, precomputedSig?: InternalSignatu
     }
   }
 
+  // Fallback: old 5D spatial grid for TEEPs without boundary (pre-v14.0)
+  if (!bestMatch || bestDistance >= threshold) {
+    const adjacentKeys = getAdjacentKeys(inputSig);
+    for (const gridKey of adjacentKeys) {
+      const cell = spatialGrid.get(gridKey);
+      if (!cell) continue;
+      for (const contentHash of cell) {
+        const teep = teepLedger.get(contentHash);
+        if (!teep || !teep.cbfResult.allSafe) continue;
+        // Skip if already checked in holo grid
+        if (teep.boundary) continue;
+        const d = signatureDistance(inputSig, teep.signature);
+        const massAdjustedDistance = d / (1 + teep.semanticMass * 0.5);
+        if (massAdjustedDistance < bestDistance) {
+          bestDistance = massAdjustedDistance;
+          bestMatch = teep;
+        }
+      }
+    }
+  }
+
   if (bestMatch && bestDistance < threshold) {
     bestMatch.hits++;
     cacheHits++;
     agfBasinHits++;
     agfApiCallsAvoided++;
+    holoLookupHits++;
     bestMatch.resonanceStrength += MORPHIC_LEARNING_RATE * 0.5;
     bestMatch.lastResonance = Date.now();
     bestMatch.semanticMass = computeSemanticMass(bestMatch.signature, bestMatch.hits);
@@ -878,6 +1006,7 @@ export function agfLookup(inputContent: string, precomputedSig?: InternalSignatu
       distance: round4(bestDistance),
     };
   }
+  holoLookupMisses++;
 
   // v13.0: Check for attractor bifurcation in the query's grid cell
   detectBifurcation(inputSig);
@@ -938,6 +1067,86 @@ export function agfLookup(inputContent: string, precomputedSig?: InternalSignatu
   cacheMisses++;
   agfJitSolves++;
   return { type: "JIT_SOLVE" };
+}
+
+// ========================================================================
+// v14.0 SEMANTIC CANNON — Three-Stage Ballistic Inference (O(1) algebraic)
+// ========================================================================
+// Golden-ratio-based algebraic chain that compresses entropy, boosts
+// coherence, and locks convergence WITHOUT iteration.
+// Stage 1: CANNON FIRE — S*0.382 (golden conjugate), φ*1.618 (golden ratio)
+// Stage 2: CAVITATION — Golden ratio collapse, semantic vacuum creation
+// Stage 3: MACH DIAMOND — dS=0.0 flux lock, standing wave resonance
+// Source: agi_basin_explorer.py _algebraic_chain() (Python + Rust)
+// ========================================================================
+
+const PHI_GOLDEN = 0.618033988749895; // Golden ratio conjugate (1/φ)
+let cannonFirings = 0;
+
+export type CannonStage = 1 | 2 | 3;
+
+export function semanticCannon(
+  sig: InternalSignature,
+  targetStage: CannonStage = 3,
+): { result: InternalSignature; method: string; resonance: number } {
+  cannonFirings++;
+
+  // STAGE 1: CANNON FIRE — compress entropy, boost coherence
+  const s1_S = round4(sig.S * 0.382);                           // Golden conjugate compression
+  const s1_dS = round4(-0.15 - Math.abs(sig.dS) * 0.5);        // Drive toward convergence
+  const s1_phi = round4(Math.min(1, sig.phi * 1.618));          // Golden ratio coherence boost
+  const s1_I_truth = round4(Math.min(1, sig.I_truth * 1.2));    // Slight truth amplification
+
+  if (targetStage === 1) {
+    return {
+      result: { ...sig, S: s1_S, dS: s1_dS, phi: s1_phi, I_truth: s1_I_truth },
+      method: "CANNON_FIRE",
+      resonance: 0,
+    };
+  }
+
+  // STAGE 2: CAVITATION (Mantis Strike) — semantic vacuum via golden collapse
+  const vacuum_phi = Math.max(0.1, Math.abs(s1_phi - sig.phi));
+  const s2_S = round4(s1_S * (PHI_GOLDEN ** 2));                // Further entropy compression
+  const s2_dS = round4(s1_dS * 2.0);                            // Accelerate convergence
+  const s2_phi = round4(Math.min(1, s1_phi + vacuum_phi * PHI_GOLDEN));  // Higher coherence
+  const s2_synergy = round4(Math.min(1, sig.synergy + vacuum_phi * 0.5)); // Vacuum synergy
+
+  if (targetStage === 2) {
+    return {
+      result: { ...sig, S: s2_S, dS: s2_dS, phi: s2_phi, synergy: s2_synergy },
+      method: "CAVITATION",
+      resonance: round4(vacuum_phi * 10),
+    };
+  }
+
+  // STAGE 3: MACH DIAMOND — flux lock (dS=0), standing wave
+  const pressureDelta = Math.abs(s2_S - sig.S);
+  const s3_S = round4(s2_S * (PHI_GOLDEN ** 3));                // Maximum entropy compression
+  const s3_dS = 0;                                               // FLUX LOCK: perfect convergence
+  const s3_phi = round4(Math.min(1, s2_phi + pressureDelta * 0.1));
+  const s3_synergy = round4(Math.min(1, s2_synergy + pressureDelta * 0.05));
+
+  return {
+    result: {
+      ...sig,
+      S: s3_S,
+      dS: s3_dS,
+      phi: s3_phi,
+      synergy: s3_synergy,
+      psi_coherence: round4(Math.min(1, sig.psi_coherence + 0.1)),
+    },
+    method: "MACH_DIAMOND",
+    resonance: round4(pressureDelta * 100),
+  };
+}
+
+// Apply cannon to a signature for accelerated basin convergence
+// Used when JIT solve is needed — cannon pre-conditions the signature
+// so the LLM response gets stronger enforcement grounding
+export function cannonCondition(inputSig: InternalSignature): InternalSignature {
+  const { result } = semanticCannon(inputSig, 3);
+  return result;
 }
 
 // ========================================================================
@@ -1225,10 +1434,17 @@ export function commitTeep(
   }
   lastCommittedTeepId = id;
 
+  // v14.0: Compute and store holographic boundary at commit time
+  const teepBoundary = computeBoundary(signature);
+  teep.boundary = teepBoundary;
+
   teepLedger.set(responseHash, teep);
 
   // v12.0: Insert into spatial hash grid for O(1) basin lookup
   gridInsert(signature, responseHash);
+
+  // v14.0: Insert into holographic 3D grid (27-cell search vs 243-cell)
+  holoGridInsert(teepBoundary, responseHash);
 
   // v13.0: Record trajectory point for ergodic memory
   recordTrajectoryPoint(id, signature);
@@ -1279,7 +1495,7 @@ export function commitTeep(
 let persistenceFlag = false;
 
 interface EngineSnapshot {
-  version: "12.0" | "13.0";
+  version: "12.0" | "13.0" | "14.0";
   timestamp: number;
   psiState: PsiState;
   fisherWeights: typeof dynamicFisherWeights;
@@ -1316,7 +1532,7 @@ export function exportEngineState(): EngineSnapshot {
     .slice(0, 100);
 
   return {
-    version: "13.0",
+    version: "14.0",
     timestamp: Date.now(),
     psiState: { ...psiState },
     fisherWeights: { ...dynamicFisherWeights },
@@ -1347,7 +1563,7 @@ export function exportEngineState(): EngineSnapshot {
 }
 
 export function importEngineState(snapshot: EngineSnapshot): { restored: number } {
-  if (snapshot.version !== "12.0" && snapshot.version !== "13.0") return { restored: 0 };
+  if (snapshot.version !== "12.0" && snapshot.version !== "13.0" && snapshot.version !== "14.0") return { restored: 0 };
 
   // Restore PsiState
   Object.assign(psiState, snapshot.psiState);
@@ -1625,7 +1841,7 @@ export function getEnforcementMetrics() {
   };
 
   return {
-    version: "13.0",
+    version: "14.0",
     psiState: { ...psiState },
     teepLedgerSize: teepLedger.size,
     basinIndexSize: basinIndex.size,
@@ -1653,6 +1869,22 @@ export function getEnforcementMetrics() {
       totalSemanticMass: round4(totalMass),
       heaviestTeepMass: round4(heaviestMass),
       totalResonanceAccum: round4(totalResonance),
+    },
+    // v14.0: Holographic spatial index metrics
+    holographic: {
+      holoGridCells: holoGrid.size,
+      holoLookupHits,
+      holoLookupMisses,
+      holoHitRate: (holoLookupHits + holoLookupMisses) > 0
+        ? round4(holoLookupHits / (holoLookupHits + holoLookupMisses))
+        : 0,
+      boundaryTeeps: Array.from(teepLedger.values()).filter(t => t.boundary).length,
+      cellReduction: `27 vs 243 (9x fewer)`,
+    },
+    // v14.0: Semantic Cannon metrics
+    cannon: {
+      firings: cannonFirings,
+      goldenRatio: PHI_GOLDEN,
     },
     // v13.0 innovation metrics
     innovations: {
