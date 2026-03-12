@@ -294,23 +294,23 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
         >
-          <div className="text-center max-w-sm">
+          <div className="text-center max-w-md">
             <div
-              className="border-2 border-dashed border-border rounded-xl p-8 mb-4 hover:border-amber-500/40 transition-colors cursor-pointer"
+              className="border-2 border-dashed border-border rounded-2xl p-12 mb-6 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all cursor-pointer group"
               onClick={() => fileInputRef.current?.click()}
             >
-              <div className="w-16 h-16 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-amber-400">
+              <div className="w-20 h-20 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-6 group-hover:scale-105 transition-transform">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-amber-400">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                   <polyline points="14 2 14 8 20 8" />
                   <line x1="12" y1="18" x2="12" y2="12" />
                   <line x1="9" y1="15" x2="15" y2="15" />
                 </svg>
               </div>
-              <div className="text-sm font-medium text-foreground mb-1">Upload a PDF to start marking up</div>
-              <div className="text-xs text-muted">Click to browse or drag & drop</div>
+              <div className="text-base font-medium text-foreground mb-2">Upload a PDF to start marking up</div>
+              <div className="text-sm text-muted">Click to browse or drag & drop</div>
             </div>
-            <div className="text-xs text-muted/60">
+            <div className="text-sm text-muted/60">
               or attach a PDF in the chat and click &quot;Open in Markup&quot;
             </div>
           </div>
@@ -333,17 +333,17 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Toolbar */}
-      <div className="border-b border-border bg-surface/30 px-2 py-1.5 shrink-0">
+      <div className="border-b border-border bg-surface/30 px-3 py-2 shrink-0">
         {/* Tool buttons */}
-        <div className="flex flex-wrap gap-0.5 mb-1.5">
+        <div className="flex flex-wrap gap-1 mb-2">
           {TOOLS.map((t) => (
             <button
               key={t.id}
               onClick={() => setActiveTool(t.id)}
               title={t.label}
-              className={`w-7 h-7 rounded text-xs flex items-center justify-center transition-colors cursor-pointer ${
+              className={`w-9 h-9 rounded-md text-sm flex items-center justify-center transition-all cursor-pointer ${
                 activeTool === t.id
-                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm shadow-amber-500/10"
                   : "text-muted hover:text-foreground hover:bg-surface-light border border-transparent"
               }`}
             >
@@ -353,14 +353,14 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
         </div>
 
         {/* Color + Width + Stamp + Actions */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1">
             {COLORS.map((c) => (
               <button
                 key={c}
                 onClick={() => setActiveColor(c)}
-                className={`w-5 h-5 rounded-sm border transition-all cursor-pointer ${
-                  activeColor === c ? "border-white scale-110" : "border-transparent hover:border-white/30"
+                className={`w-7 h-7 rounded border-2 transition-all cursor-pointer ${
+                  activeColor === c ? "border-white scale-110 shadow-md" : "border-transparent hover:border-white/40"
                 }`}
                 style={{ backgroundColor: c }}
                 title={c}
@@ -368,17 +368,17 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
             ))}
           </div>
 
-          <span className="text-border">|</span>
+          <div className="w-px h-6 bg-border" />
 
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1">
             {WIDTHS.map((w) => (
               <button
                 key={w.value}
                 onClick={() => setActiveWidth(w.value)}
-                className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors cursor-pointer ${
+                className={`px-2.5 py-1 rounded-md text-xs font-mono transition-all cursor-pointer ${
                   activeWidth === w.value
-                    ? "bg-accent/15 text-accent-light"
-                    : "text-muted hover:text-foreground"
+                    ? "bg-accent/15 text-accent-light border border-accent/25"
+                    : "text-muted hover:text-foreground hover:bg-surface-light"
                 }`}
               >
                 {w.label}
@@ -388,11 +388,11 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
 
           {activeTool === "stamp" && (
             <>
-              <span className="text-border">|</span>
+              <div className="w-px h-6 bg-border" />
               <select
                 value={activeStamp}
                 onChange={(e) => setActiveStamp(e.target.value as StampType)}
-                className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] font-mono text-foreground cursor-pointer"
+                className="bg-surface border border-border rounded-md px-2.5 py-1 text-xs font-mono text-foreground cursor-pointer"
               >
                 {STAMPS.map((s) => (
                   <option key={s} value={s}>{s}</option>
@@ -401,35 +401,35 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
             </>
           )}
 
-          <span className="text-border">|</span>
+          <div className="w-px h-6 bg-border" />
 
-          <button onClick={undo} className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground hover:bg-surface-light cursor-pointer" title="Undo (Ctrl+Z)">
+          <button onClick={undo} className="px-2.5 py-1 rounded-md text-xs font-mono text-muted hover:text-foreground hover:bg-surface-light transition-colors cursor-pointer" title="Undo (Ctrl+Z)">
             Undo
           </button>
-          <button onClick={redo} className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground hover:bg-surface-light cursor-pointer" title="Redo">
+          <button onClick={redo} className="px-2.5 py-1 rounded-md text-xs font-mono text-muted hover:text-foreground hover:bg-surface-light transition-colors cursor-pointer" title="Redo">
             Redo
           </button>
-          <button onClick={clearPage} className="px-1.5 py-0.5 rounded text-[10px] font-mono text-danger/70 hover:text-danger hover:bg-danger/10 cursor-pointer" title="Clear page annotations">
+          <button onClick={clearPage} className="px-2.5 py-1 rounded-md text-xs font-mono text-danger/70 hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer" title="Clear page annotations">
             Clear
           </button>
 
-          <span className="text-border">|</span>
+          <div className="w-px h-6 bg-border" />
 
           {/* Merge PDF button */}
           <button
             onClick={() => mergeInputRef.current?.click()}
             disabled={merging}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 cursor-pointer disabled:opacity-30"
+            className="px-3 py-1 rounded-md text-xs font-semibold font-mono text-amber-400/80 hover:text-amber-400 hover:bg-amber-500/15 border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-pointer disabled:opacity-30"
             title="Merge additional PDFs"
           >
-            {merging ? "Merging..." : "+ Merge"}
+            {merging ? "Merging..." : "+ Merge PDF"}
           </button>
 
           {/* Delete selected pages */}
           {selectedPages.size > 0 && selectedPages.size < pageCount && (
             <button
               onClick={handleDeletePages}
-              className="px-1.5 py-0.5 rounded text-[10px] font-mono text-danger/70 hover:text-danger hover:bg-danger/10 cursor-pointer"
+              className="px-3 py-1 rounded-md text-xs font-mono text-danger/70 hover:text-danger hover:bg-danger/10 border border-danger/20 transition-all cursor-pointer"
               title={`Delete ${selectedPages.size} selected page(s)`}
             >
               Delete ({selectedPages.size})
@@ -439,8 +439,8 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
           {/* Toggle page sidebar */}
           <button
             onClick={() => setShowPageSidebar(!showPageSidebar)}
-            className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer ${
-              showPageSidebar ? "text-amber-400 bg-amber-500/10" : "text-muted hover:text-foreground hover:bg-surface-light"
+            className={`px-2.5 py-1 rounded-md text-xs font-mono transition-all cursor-pointer ${
+              showPageSidebar ? "text-amber-400 bg-amber-500/10 border border-amber-500/20" : "text-muted hover:text-foreground hover:bg-surface-light"
             }`}
             title="Toggle page panel"
           >
@@ -450,10 +450,10 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
           {/* Download */}
           <button
             onClick={handleDownload}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground hover:bg-surface-light cursor-pointer"
+            className="px-3 py-1 rounded-md text-xs font-mono text-emerald-400/80 hover:text-emerald-400 hover:bg-emerald-500/15 border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer"
             title="Download PDF"
           >
-            Save
+            Save PDF
           </button>
         </div>
       </div>
@@ -463,7 +463,7 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
         {/* Page sidebar */}
         {showPageSidebar && (
           <div
-            className="w-32 shrink-0 border-r border-border bg-surface/20 overflow-y-auto"
+            className="w-40 shrink-0 border-r border-border bg-surface/20 overflow-y-auto"
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
             onDrop={(e) => {
               e.preventDefault();
@@ -473,7 +473,7 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
               if (files.length > 0) handleMerge(files);
             }}
           >
-            <div className="p-1.5 space-y-1">
+            <div className="p-2 space-y-1.5">
               {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNum) => (
                 <div
                   key={pageNum}
@@ -491,8 +491,8 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
                   onDragLeave={() => setDragOverPage(null)}
                 >
                   {/* Page number + checkbox */}
-                  <div className="flex items-center justify-between px-1.5 py-0.5">
-                    <span className="text-[9px] font-mono text-muted">{pageNum}</span>
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <span className="text-xs font-mono text-muted">{pageNum}</span>
                     <div className="flex items-center gap-0.5">
                       {/* Move up */}
                       {pageNum > 1 && (
@@ -525,18 +525,18 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
                     </div>
                   </div>
                   {/* Mini preview area — placeholder colored block */}
-                  <div className="mx-1 mb-1 h-16 rounded-sm bg-white/80 flex items-center justify-center">
-                    <span className="text-[10px] text-gray-400 font-mono">{pageNum}</span>
+                  <div className="mx-1.5 mb-1.5 h-24 rounded bg-white/80 flex items-center justify-center shadow-sm">
+                    <span className="text-sm text-gray-400 font-mono">{pageNum}</span>
                   </div>
                 </div>
               ))}
 
               {/* Drop zone for merging */}
               <div
-                className="border border-dashed border-border rounded p-2 text-center hover:border-amber-500/40 transition-colors cursor-pointer"
+                className="border-2 border-dashed border-border rounded-lg p-3 text-center hover:border-amber-500/40 hover:bg-amber-500/5 transition-all cursor-pointer"
                 onClick={() => mergeInputRef.current?.click()}
               >
-                <span className="text-[9px] text-muted">+ Add PDF</span>
+                <span className="text-xs text-muted font-mono">+ Add PDF</span>
               </div>
             </div>
           </div>
@@ -567,32 +567,32 @@ export default function GreyBeamCanvas({ pdfData, pdfName, annotations, onAnnota
       </div>
 
       {/* Footer: navigation + zoom */}
-      <div className="h-9 flex items-center justify-between px-3 border-t border-border bg-surface/30 shrink-0">
-        <div className="flex items-center gap-2">
+      <div className="h-11 flex items-center justify-between px-4 border-t border-border bg-surface/30 shrink-0">
+        <div className="flex items-center gap-3">
           <button
             onClick={prevPage}
             disabled={currentPage <= 1}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+            className="px-2 py-1 rounded-md text-xs font-mono text-muted hover:text-foreground hover:bg-surface-light disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
           >
-            &lt;
+            &lt; Prev
           </button>
-          <span className="text-[10px] font-mono text-muted">
+          <span className="text-xs font-mono text-foreground">
             Page {currentPage} / {pageCount}
           </span>
           <button
             onClick={nextPage}
             disabled={currentPage >= pageCount}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+            className="px-2 py-1 rounded-md text-xs font-mono text-muted hover:text-foreground hover:bg-surface-light disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
           >
-            &gt;
+            Next &gt;
           </button>
         </div>
 
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] font-mono text-amber-400 mr-2">{pdfName || "PDF"}</span>
-          <button onClick={zoomOut} className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground cursor-pointer">&minus;</button>
-          <span className="text-[10px] font-mono text-muted w-10 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={zoomIn} className="px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-foreground cursor-pointer">+</button>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono text-amber-400 mr-2 truncate max-w-[200px]">{pdfName || "PDF"}</span>
+          <button onClick={zoomOut} className="w-7 h-7 rounded-md text-sm font-mono text-muted hover:text-foreground hover:bg-surface-light cursor-pointer transition-colors flex items-center justify-center">&minus;</button>
+          <span className="text-xs font-mono text-foreground w-12 text-center">{Math.round(zoom * 100)}%</span>
+          <button onClick={zoomIn} className="w-7 h-7 rounded-md text-sm font-mono text-muted hover:text-foreground hover:bg-surface-light cursor-pointer transition-colors flex items-center justify-center">+</button>
         </div>
       </div>
 

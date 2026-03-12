@@ -1180,7 +1180,7 @@ export default function ChatPage() {
   return (
     <div className={`flex-1 flex min-h-0 ${canvasOpen ? "" : "flex-col"}`}>
     {/* Chat pane */}
-    <div className={`flex flex-col min-h-0 relative ${canvasOpen ? "w-1/2 border-r border-border max-md:hidden" : "flex-1"}`}>
+    <div className={`flex flex-col min-h-0 relative ${canvasOpen ? "w-1/3 border-r border-border max-md:hidden" : "flex-1"}`}>
       {/* Chat header */}
       <div className="h-12 flex items-center justify-between px-4 border-b border-border bg-surface/30 shrink-0">
         <div className="flex items-center gap-3">
@@ -1455,7 +1455,7 @@ export default function ChatPage() {
 
     {/* Canvas + Preview pane */}
     {canvasOpen && (
-      <div className="w-1/2 min-h-0 flex flex-col max-md:fixed max-md:inset-0 max-md:w-full max-md:z-30 max-md:bg-background">
+      <div className="w-2/3 min-h-0 flex flex-col max-md:fixed max-md:inset-0 max-md:w-full max-md:z-30 max-md:bg-background">
         {/* Tab bar */}
         <div className="h-10 flex items-center justify-between px-2 border-b border-border bg-surface/30 shrink-0">
           <div className="flex items-center gap-1">
