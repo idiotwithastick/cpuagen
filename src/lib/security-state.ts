@@ -185,3 +185,112 @@ export function unlockAdmin() {
   state.adminFailedAttempts.clear();
   addEvent({ type: "admin_action", ip: "admin", details: "Admin unlocked by admin" });
 }
+
+// ========================================================================
+// v14.0 EARLY ACCESS LEDGER — Email signup + passcode gating
+// ========================================================================
+
+interface EarlyAccessEntry {
+  email: string;
+  ip: string;
+  timestamp: number;
+  passcode: string;         // 6-char alphanumeric code
+  passcodeUsed: boolean;    // Has the user redeemed the code
+  passcodeSentAt?: number;  // When admin sent the code
+  accessGranted: boolean;   // Can this user access the app
+}
+
+const earlyAccessLedger = new Map<string, EarlyAccessEntry>(); // email → entry
+
+function generatePasscode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No O/0/I/1 confusion
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+export function earlyAccessSignup(email: string, ip: string): { ok: boolean; alreadyExists: boolean } {
+  const normalized = email.toLowerCase().trim();
+  if (earlyAccessLedger.has(normalized)) {
+    return { ok: true, alreadyExists: true };
+  }
+
+  const entry: EarlyAccessEntry = {
+    email: normalized,
+    ip,
+    timestamp: Date.now(),
+    passcode: generatePasscode(),
+    passcodeUsed: false,
+    accessGranted: false,
+  };
+
+  earlyAccessLedger.set(normalized, entry);
+  addEvent({ type: "admin_action", ip, details: `Early access signup: ${normalized}` });
+  return { ok: true, alreadyExists: false };
+}
+
+export function validatePasscode(email: string, passcode: string): { valid: boolean; reason?: string } {
+  const normalized = email.toLowerCase().trim();
+  const entry = earlyAccessLedger.get(normalized);
+  if (!entry) return { valid: false, reason: "Email not found in early access list" };
+  if (entry.passcode !== passcode.toUpperCase().trim()) return { valid: false, reason: "Invalid passcode" };
+  if (entry.passcodeUsed && entry.accessGranted) return { valid: true }; // Already redeemed, still valid
+
+  entry.passcodeUsed = true;
+  entry.accessGranted = true;
+  addEvent({ type: "admin_action", ip: "passcode", details: `Passcode redeemed: ${normalized}` });
+  return { valid: true };
+}
+
+export function isEmailGranted(email: string): boolean {
+  const entry = earlyAccessLedger.get(email.toLowerCase().trim());
+  return entry?.accessGranted ?? false;
+}
+
+export function getEarlyAccessLedger(): Array<{
+  email: string;
+  timestamp: number;
+  passcode: string;
+  passcodeUsed: boolean;
+  passcodeSentAt?: number;
+  accessGranted: boolean;
+}> {
+  return Array.from(earlyAccessLedger.values())
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .map(({ email, timestamp, passcode, passcodeUsed, passcodeSentAt, accessGranted }) => ({
+      email, timestamp, passcode, passcodeUsed, passcodeSentAt, accessGranted,
+    }));
+}
+
+export function markPasscodeSent(email: string): boolean {
+  const entry = earlyAccessLedger.get(email.toLowerCase().trim());
+  if (!entry) return false;
+  entry.passcodeSentAt = Date.now();
+  return true;
+}
+
+export function grantAccess(email: string): boolean {
+  const entry = earlyAccessLedger.get(email.toLowerCase().trim());
+  if (!entry) return false;
+  entry.accessGranted = true;
+  return true;
+}
+
+export function revokeAccess(email: string): boolean {
+  const entry = earlyAccessLedger.get(email.toLowerCase().trim());
+  if (!entry) return false;
+  entry.accessGranted = false;
+  return true;
+}
+
+export function getEarlyAccessStats(): { total: number; granted: number; pending: number; redeemed: number } {
+  let granted = 0, pending = 0, redeemed = 0;
+  for (const entry of earlyAccessLedger.values()) {
+    if (entry.accessGranted) granted++;
+    if (!entry.passcodeSentAt) pending++;
+    if (entry.passcodeUsed) redeemed++;
+  }
+  return { total: earlyAccessLedger.size, granted, pending, redeemed };
+}

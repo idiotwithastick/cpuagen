@@ -3,6 +3,11 @@ import {
   getLockoutData,
   getEnforcementStats,
   getSecurityEvents,
+  getEarlyAccessLedger,
+  getEarlyAccessStats,
+  markPasscodeSent,
+  grantAccess,
+  revokeAccess,
 } from "@/lib/security-state";
 
 function getIp(req: Request): string {
@@ -77,6 +82,10 @@ export async function GET(req: Request) {
       morphic: metrics.morphic,
       recentTeeps,
     },
+    earlyAccess: {
+      stats: getEarlyAccessStats(),
+      ledger: getEarlyAccessLedger(),
+    },
     meta: {
       signature: {
         n: sig.n,
@@ -92,4 +101,49 @@ export async function GET(req: Request) {
       cbf: { allSafe: cbf.allSafe },
     },
   });
+}
+
+// POST handler for early access admin actions
+export async function POST(req: Request) {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const token = authHeader.slice(7);
+  try {
+    const decoded = Buffer.from(token, "base64").toString();
+    const adminUser = process.env.ADMIN_USER || "wforeman";
+    if (!decoded.startsWith(adminUser + ":")) {
+      return Response.json({ error: "Invalid token" }, { status: 401 });
+    }
+  } catch {
+    return Response.json({ error: "Invalid token" }, { status: 401 });
+  }
+
+  let body: { action: string; email: string };
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const { action, email } = body;
+  if (!action || !email) {
+    return Response.json({ error: "Missing action or email" }, { status: 400 });
+  }
+
+  if (action === "mark_sent") {
+    const ok = markPasscodeSent(email);
+    return Response.json({ ok });
+  }
+  if (action === "grant") {
+    const ok = grantAccess(email);
+    return Response.json({ ok });
+  }
+  if (action === "revoke") {
+    const ok = revokeAccess(email);
+    return Response.json({ ok });
+  }
+
+  return Response.json({ error: "Unknown action" }, { status: 400 });
 }

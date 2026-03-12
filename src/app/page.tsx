@@ -205,37 +205,66 @@ function EnforcementDemo() {
 function WaitlistForm() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [alreadyExists, setAlreadyExists] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email) setSubmitted(true);
+    if (!email) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "subscribe", email }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setSubmitted(true);
+        setAlreadyExists(data.alreadyExists);
+      } else {
+        setError(data.error || "Something went wrong");
+      }
+    } catch {
+      setError("Network error — please try again");
+    }
+    setLoading(false);
   };
 
   if (submitted) {
     return (
       <div className="flex items-center gap-2 text-success font-mono text-sm">
         <span className="w-2 h-2 bg-success rounded-full animate-pulse-live" />
-        You&apos;re on the list. We&apos;ll be in touch.
+        {alreadyExists
+          ? "You\u2019re already on the list! Check your email for your access code."
+          : "You\u2019re in! We\u2019ll send your access code soon."}
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 w-full max-w-md">
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@email.com"
-        required
-        className="flex-1 px-4 py-3 rounded-lg bg-surface border border-border text-foreground placeholder:text-muted/50 font-mono text-sm focus:outline-none focus:border-accent/50 transition-colors"
-      />
-      <button
-        type="submit"
-        className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-all duration-200 hover:glow-accent cursor-pointer"
-      >
-        Early Access
-      </button>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2 w-full max-w-md">
+      <div className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@email.com"
+          required
+          disabled={loading}
+          className="flex-1 px-4 py-3 rounded-lg bg-surface border border-border text-foreground placeholder:text-muted/50 font-mono text-sm focus:outline-none focus:border-accent/50 transition-colors disabled:opacity-50"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-all duration-200 hover:glow-accent cursor-pointer disabled:opacity-50"
+        >
+          {loading ? "..." : "Early Access"}
+        </button>
+      </div>
+      {error && <div className="text-red-400 text-xs font-mono">{error}</div>}
     </form>
   );
 }

@@ -82,6 +82,17 @@ interface DashboardData {
       sig: { n: number; S: number; phi: number; I_truth: number };
     }>;
   };
+  earlyAccess?: {
+    stats: { total: number; granted: number; pending: number; redeemed: number };
+    ledger: Array<{
+      email: string;
+      timestamp: number;
+      passcode: string;
+      passcodeUsed: boolean;
+      passcodeSentAt?: number;
+      accessGranted: boolean;
+    }>;
+  };
   meta: {
     signature: {
       n: number; S: number; phi: number; dS: number;
@@ -213,6 +224,25 @@ export default function AdminDashboard() {
       if (res.ok) {
         await fetchData();
       }
+    } catch {
+      // ignore
+    }
+    setActionLoading("");
+  };
+
+  const handleEarlyAccessAction = async (action: string, email: string) => {
+    if (!token) return;
+    setActionLoading(`${action}:${email}`);
+    try {
+      await fetch("/api/admin/stats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action, email }),
+      });
+      await fetchData();
     } catch {
       // ignore
     }
@@ -620,6 +650,106 @@ export default function AdminDashboard() {
                   <div className="text-[9px] font-mono text-[#71717a]">{barrier}</div>
                 </div>
               ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Early Access Management */}
+        {data.earlyAccess && (
+          <Card title="EARLY ACCESS MANAGEMENT">
+            <div className="space-y-4">
+              {/* Stats Row */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-purple-500/20">
+                  <div className="text-lg font-bold font-mono text-purple-400">{data.earlyAccess.stats.total}</div>
+                  <div className="text-[9px] text-[#71717a]">Total Signups</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-green-500/20">
+                  <div className="text-lg font-bold font-mono text-green-400">{data.earlyAccess.stats.granted}</div>
+                  <div className="text-[9px] text-[#71717a]">Access Granted</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-yellow-500/20">
+                  <div className="text-lg font-bold font-mono text-yellow-400">{data.earlyAccess.stats.pending}</div>
+                  <div className="text-[9px] text-[#71717a]">Pending Send</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-cyan-500/20">
+                  <div className="text-lg font-bold font-mono text-cyan-400">{data.earlyAccess.stats.redeemed}</div>
+                  <div className="text-[9px] text-[#71717a]">Redeemed</div>
+                </div>
+              </div>
+
+              {/* Ledger Table */}
+              {data.earlyAccess.ledger.length === 0 ? (
+                <div className="text-[10px] text-[#71717a]/50 font-mono py-4 text-center">
+                  No early access signups yet
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto">
+                  <table className="w-full text-[10px] font-mono">
+                    <thead>
+                      <tr className="text-[#71717a] border-b border-[#1e1e2e]">
+                        <th className="text-left py-1.5 pr-2">Email</th>
+                        <th className="text-left py-1.5 pr-2">Passcode</th>
+                        <th className="text-left py-1.5 pr-2">Signed Up</th>
+                        <th className="text-left py-1.5 pr-2">Status</th>
+                        <th className="text-right py-1.5">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.earlyAccess.ledger.map((entry) => (
+                        <tr key={entry.email} className="border-b border-[#1e1e2e]/50 hover:bg-[#1e1e2e]/30">
+                          <td className="py-2 pr-2 text-[#e4e4e7]">{entry.email}</td>
+                          <td className="py-2 pr-2">
+                            <span className="px-1.5 py-0.5 rounded bg-[#1a1a2e] text-purple-400 select-all">
+                              {entry.passcode}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-2 text-[#71717a]">
+                            {new Date(entry.timestamp).toLocaleDateString()}
+                          </td>
+                          <td className="py-2 pr-2">
+                            {entry.accessGranted ? (
+                              <span className="text-green-400">✓ Granted</span>
+                            ) : entry.passcodeSentAt ? (
+                              <span className="text-yellow-400">📧 Sent</span>
+                            ) : (
+                              <span className="text-[#71717a]">Pending</span>
+                            )}
+                          </td>
+                          <td className="py-2 text-right space-x-1">
+                            {!entry.passcodeSentAt && (
+                              <button
+                                onClick={() => handleEarlyAccessAction("mark_sent", entry.email)}
+                                disabled={!!actionLoading}
+                                className="px-2 py-0.5 rounded bg-blue-900/40 border border-blue-500/20 text-blue-400 hover:bg-blue-900/60 transition-colors disabled:opacity-50 cursor-pointer"
+                              >
+                                {actionLoading === `mark_sent:${entry.email}` ? "..." : "Mark Sent"}
+                              </button>
+                            )}
+                            {!entry.accessGranted ? (
+                              <button
+                                onClick={() => handleEarlyAccessAction("grant", entry.email)}
+                                disabled={!!actionLoading}
+                                className="px-2 py-0.5 rounded bg-green-900/40 border border-green-500/20 text-green-400 hover:bg-green-900/60 transition-colors disabled:opacity-50 cursor-pointer"
+                              >
+                                {actionLoading === `grant:${entry.email}` ? "..." : "Grant"}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleEarlyAccessAction("revoke", entry.email)}
+                                disabled={!!actionLoading}
+                                className="px-2 py-0.5 rounded bg-red-900/40 border border-red-500/20 text-red-400 hover:bg-red-900/60 transition-colors disabled:opacity-50 cursor-pointer"
+                              >
+                                {actionLoading === `revoke:${entry.email}` ? "..." : "Revoke"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </Card>
         )}
