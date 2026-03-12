@@ -46,7 +46,7 @@ const state: LockoutState = {
   },
 };
 
-const SITE_FAIL_LIMIT = 5;
+const SITE_FAIL_LIMIT = 20;
 const ADMIN_FAIL_LIMIT = 3;
 
 function addEvent(event: Omit<SecurityEvent, "timestamp">) {
@@ -64,10 +64,10 @@ export function recordSiteAuthFail(ip: string): { locked: boolean; attempts: num
 
   addEvent({ type: "site_auth_fail", ip, details: `Attempt ${current}/${SITE_FAIL_LIMIT}` });
 
-  if (state.totalSiteFailures >= SITE_FAIL_LIMIT) {
+  if (current >= SITE_FAIL_LIMIT) {
     state.siteLocked = true;
     state.siteLockTime = Date.now();
-    addEvent({ type: "site_lockout", ip, details: `Site locked after ${state.totalSiteFailures} total failures` });
+    addEvent({ type: "site_lockout", ip, details: `Site locked after ${current} failures from IP ${ip}` });
     return { locked: true, attempts: current };
   }
 

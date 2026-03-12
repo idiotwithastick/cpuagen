@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
       // If lockout check fails, continue with normal auth
     }
 
-    if (submittedPwd === SITE_PASSWORD) {
+    if (submittedPwd.toUpperCase() === SITE_PASSWORD.toUpperCase()) {
       const dest = new URL("/", request.url);
       dest.searchParams.delete("pwd");
       const response = NextResponse.redirect(dest);
