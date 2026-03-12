@@ -539,6 +539,8 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
+  const justHydratedRef = useRef(false);
+  const autoOpenedForRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -568,6 +570,7 @@ export default function ChatPage() {
       setMessages(latest.messages);
     }
     setHydrated(true);
+    justHydratedRef.current = true;
 
     // v12.1: TEEP restore removed — Vercel serverless isolation means
     // POST /api/teep goes to a different instance than /api/chat.
@@ -577,6 +580,11 @@ export default function ChatPage() {
   // Persist conversations on change
   useEffect(() => {
     if (!hydrated) return;
+    // Skip the first fire right after hydration — we just loaded this data
+    if (justHydratedRef.current) {
+      justHydratedRef.current = false;
+      return;
+    }
     if (activeConvId && messages.length > 0) {
       setConversations((prev) => {
         const existing = prev.findIndex((c) => c.id === activeConvId);
@@ -640,21 +648,27 @@ export default function ChatPage() {
     setCanvasCode(code);
     if (lang) setCanvasLang(lang);
     if (htmlMatch) setActiveTab("preview");
-  }, [messages, canvasOpen, loading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, loading]);
 
   // Auto-open Canvas+Preview for HTML responses when canvas is not open
   useEffect(() => {
     if (canvasOpen || loading) return;
     const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && m.content);
     if (!lastAssistant) return;
+    // Don't re-auto-open for the same message (prevents loop with canvasOpen toggle)
+    const msgKey = lastAssistant.content.slice(0, 100);
+    if (autoOpenedForRef.current === msgKey) return;
     const htmlMatch = lastAssistant.content.match(/```(html|htm|svg)\n([\s\S]*?)```/);
     if (htmlMatch && htmlMatch[2].length > 50) {
+      autoOpenedForRef.current = msgKey;
       setCanvasCode(htmlMatch[2]);
       setCanvasLang(htmlMatch[1]);
       setCanvasOpen(true);
       setActiveTab("preview");
     }
-  }, [messages, canvasOpen, loading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, loading]);
 
   const providerConfig = PROVIDERS.find((p) => p.id === settings.activeProvider);
   const isDemo = providerConfig?.noKeyRequired;
