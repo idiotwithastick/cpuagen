@@ -1,4 +1,4 @@
-import { thermosolve, cbfCheck, commitTeep, agfLookup, getEnforcementMetrics, getRecentTeeps, cannonCondition, seedFromD1 } from "@/lib/enforcement";
+import { thermosolve, cbfCheck, commitTeep, agfLookup, getEnforcementMetrics, getRecentTeeps, cannonCondition, seedFromD1, findNearestTeeps } from "@/lib/enforcement";
 import { recordEnforcementRequest, recordTeepCached } from "@/lib/security-state";
 
 export const runtime = "nodejs";
@@ -690,29 +690,44 @@ export async function POST(req: Request) {
           const cannonSig = cannonCondition(preSig);
 
           // ============================================================
-          // v15.0: INJECT ψ* INTO LLM CALL — PASS STATE, NOT WORDS
+          // v15.1: PASS STATE, NOT WORDS — LLM is a State Renderer
           // ============================================================
-          // The descended state ψ* (cannon-conditioned signature) is injected
-          // as a system-level grounding directive. The LLM receives the
-          // thermodynamic basin coordinates that its response must converge
-          // toward. This is the critical bridge between physics and generation:
-          //   ψ₀ = thermosolve(prompt)
-          //   ψ* = cannonCondition(ψ₀)   ← descended via golden-ratio chain
-          //   LLM(prompt, ψ*) → response  ← generation grounded in ψ*
-          // Without this, the LLM receives raw words with no physics grounding.
+          // The canonical equation computes all semantics on CPU:
+          //   dψ/dt = g_F^{-1}(ψ)·[-η∇S + α·F_flow - β·∇V_obs + γ·F_dyn]
+          // P (user words) was consumed by thermosolve to produce ψ₀.
+          // After cannon descent: ψ₀ → ψ*. P is no longer needed.
+          // The LLM receives ψ* + nearest solved basins as rendering context.
+          // It interpolates from known basins to render ψ* into natural language.
           // ============================================================
-          const psiGrounding = [
-            `[SSD-RCI ψ* State Vector — Descended Basin Coordinates]`,
-            `S=${cannonSig.S} φ=${cannonSig.phi} dS=${cannonSig.dS} `,
-            `I_truth=${cannonSig.I_truth} β_T=${cannonSig.beta_T} `,
-            `ψ_coherence=${cannonSig.psi_coherence} synergy=${cannonSig.synergy} `,
-            `naturality=${cannonSig.naturality} Q=${cannonSig.Q_quality}`,
-            `[Target: Converge response toward S↓ φ↑ dS→0 synergy≥0.5]`,
-          ].join("");
 
-          // Prepend ψ* as system message so LLM generation is physics-grounded
+          // Find nearest solved basins to ψ* for rendering context
+          const nearestTeeps = findNearestTeeps(cannonSig, 3, 2.0);
+
+          // Build basin context: the LLM sees solved examples near this state
+          const basinContext = nearestTeeps.length > 0
+            ? nearestTeeps.map((t, i) =>
+                `[Basin ${i + 1} (d=${t.distance})] ${t.content}`
+              ).join("\n\n")
+            : "";
+
+          // Construct state-only grounding — NO original words
+          const stateDirective = [
+            `You are a state renderer. Your job is to render the following thermodynamic state into a natural language response.`,
+            ``,
+            `[ψ* Descended Basin Coordinates]`,
+            `S=${cannonSig.S} φ=${cannonSig.phi} dS=${cannonSig.dS} I_truth=${cannonSig.I_truth} β_T=${cannonSig.beta_T} ψ_coherence=${cannonSig.psi_coherence} synergy=${cannonSig.synergy} naturality=${cannonSig.naturality} Q=${cannonSig.Q_quality}`,
+            `[Target: S↓ φ↑ dS→0 synergy≥0.5]`,
+            ``,
+            nearestTeeps.length > 0
+              ? `The following solved basins are nearest to this state. Use them as rendering context to interpolate your response:\n\n${basinContext}`
+              : `No nearby solved basins found. Render directly from the state vector and the conversation context.`,
+          ].join("\n");
+
+          // Build grounded messages: state directive + conversation history
+          // The user's words appear in conversation history (for multi-turn context)
+          // but the LLM's primary directive is to render from ψ*, not from words
           const groundedMessages: { role: string; content: unknown }[] = [
-            { role: "system", content: psiGrounding },
+            { role: "system", content: stateDirective },
             ...apiMessages,
           ];
 

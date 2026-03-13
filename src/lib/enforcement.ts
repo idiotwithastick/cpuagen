@@ -1140,6 +1140,82 @@ export async function agfLookup(inputContent: string, precomputedSig?: InternalS
 }
 
 // ========================================================================
+// v15.1 NEAREST TEEP RETRIEVAL — Find K closest basins by Fisher geodesic
+// ========================================================================
+// For JIT solve, the LLM is a STATE RENDERER. It doesn't need the user's
+// original words — it needs the descended state ψ* and nearby solved basins
+// as rendering context. This function returns the K nearest TEEPs by
+// signature distance so the LLM can interpolate a response from known basins.
+// ========================================================================
+
+export interface NearestTeep {
+  id: string;
+  content: string;
+  distance: number;
+  signature: InternalSignature;
+}
+
+export function findNearestTeeps(
+  targetSig: InternalSignature,
+  k: number = 3,
+  maxDistance: number = 2.0,
+): NearestTeep[] {
+  const candidates: NearestTeep[] = [];
+
+  // Search holographic grid first (fast 27-cell scan)
+  const targetBoundary = computeBoundary(targetSig);
+  const holoKeys = getHoloAdjacentKeys(targetBoundary);
+  const seen = new Set<string>();
+
+  for (const gridKey of holoKeys) {
+    const cell = holoGrid.get(gridKey);
+    if (!cell) continue;
+    for (const contentHash of cell) {
+      if (seen.has(contentHash)) continue;
+      seen.add(contentHash);
+      const teep = teepLedger.get(contentHash);
+      if (!teep || !teep.cbfResult.allSafe) continue;
+      const d = signatureDistance(targetSig, teep.signature);
+      if (d < maxDistance) {
+        candidates.push({
+          id: teep.id,
+          content: teep.content,
+          distance: round4(d),
+          signature: teep.signature,
+        });
+      }
+    }
+  }
+
+  // Fallback: spatial grid for non-holographic TEEPs
+  const adjacentKeys = getAdjacentKeys(targetSig);
+  for (const gridKey of adjacentKeys) {
+    const cell = spatialGrid.get(gridKey);
+    if (!cell) continue;
+    for (const contentHash of cell) {
+      if (seen.has(contentHash)) continue;
+      seen.add(contentHash);
+      const teep = teepLedger.get(contentHash);
+      if (!teep || !teep.cbfResult.allSafe) continue;
+      if (teep.boundary) continue; // Already checked in holo grid
+      const d = signatureDistance(targetSig, teep.signature);
+      if (d < maxDistance) {
+        candidates.push({
+          id: teep.id,
+          content: teep.content,
+          distance: round4(d),
+          signature: teep.signature,
+        });
+      }
+    }
+  }
+
+  // Sort by distance, return top K
+  candidates.sort((a, b) => a.distance - b.distance);
+  return candidates.slice(0, k);
+}
+
+// ========================================================================
 // v14.0 SEMANTIC CANNON — Three-Stage Ballistic Inference (O(1) algebraic)
 // ========================================================================
 // Golden-ratio-based algebraic chain that compresses entropy, boosts
