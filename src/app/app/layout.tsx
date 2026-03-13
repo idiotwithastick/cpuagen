@@ -9,7 +9,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const nav = [
-    { href: "/app/chat", label: "Workspace", icon: "\u{1F4AC}", active: pathname?.startsWith("/app/chat") || pathname?.startsWith("/app/code") },
+    { href: "/app/chat", label: "Chat", icon: "\u{1F4AC}", active: pathname === "/app/chat" },
+    { href: "/app/code", label: "Code", icon: "\u{1F4BB}", active: pathname?.startsWith("/app/code") },
+    { href: "/app/dual", label: "Dual", icon: "\u{1F500}", active: pathname?.startsWith("/app/dual") },
     { href: "/app/dev", label: "Dev Lab", icon: "\u{1F9EA}", active: pathname?.startsWith("/app/dev") },
     { href: "/app/settings", label: "Settings", icon: "\u2699\uFE0F", active: pathname?.startsWith("/app/settings") },
   ];
