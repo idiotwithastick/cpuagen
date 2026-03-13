@@ -29,6 +29,17 @@
 //         core/agf_middleware.py, ArXiv research papers (21 surveyed)
 // ========================================================================
 
+import {
+  persistTeep as d1PersistTeep,
+  persistBasinIndex as d1PersistBasinIndex,
+  persistHitUpdate as d1PersistHitUpdate,
+  persistStatsIncrement as d1PersistStats,
+  loadHotTeeps as d1LoadHotTeeps,
+  loadBasinIndex as d1LoadBasinIndex,
+  lookupByInputHash as d1LookupByInputHash,
+  isD1Configured,
+} from "./teep-persistence";
+
 // ---------- Types ----------
 
 interface InternalSignature {
@@ -909,7 +920,7 @@ export type AgfResult =
   | { type: "BASIN_HIT"; content: string; teepId: string; signature: InternalSignature; distance: number }
   | { type: "JIT_SOLVE" };
 
-export function agfLookup(inputContent: string, precomputedSig?: InternalSignature): AgfResult {
+export async function agfLookup(inputContent: string, precomputedSig?: InternalSignature): Promise<AgfResult> {
   const inputHash = fnv1aHash(inputContent.toLowerCase());
 
   // Step 1: Exact input hash lookup → O(1)
@@ -925,6 +936,11 @@ export function agfLookup(inputContent: string, precomputedSig?: InternalSignatu
       cached.lastResonance = Date.now();
       cached.semanticMass = computeSemanticMass(cached.signature, cached.hits);
       reinforceMorphicField(cached.signature);
+      // v15.0: Async D1 hit update — keep persistent store in sync
+      if (isD1Configured()) {
+        d1PersistHitUpdate(cached.content_hash, cached.hits, cached.resonanceStrength, cached.semanticMass).catch(() => {});
+        d1PersistStats("hit").catch(() => {});
+      }
       return {
         type: "FULL_HIT",
         content: cached.content,
@@ -1063,7 +1079,56 @@ export function agfLookup(inputContent: string, precomputedSig?: InternalSignatu
     }
   }
 
-  // Step 3: Total miss — JIT solve required
+  // Step 3: v15.0 D1 FALLBACK — check persistent store before JIT solve
+  // This catches TEEPs committed by OTHER serverless instances or past deployments
+  if (isD1Configured()) {
+    try {
+      const d1Hit = await d1LookupByInputHash(inputHash);
+      if (d1Hit) {
+        // Seed into in-memory cache for future O(1) hits
+        const restoredTeep: CachedTeep = {
+          id: d1Hit.id,
+          signature: d1Hit.signature as unknown as InternalSignature,
+          cbfResult: { allSafe: d1Hit.cbf_all_safe },
+          content_hash: d1Hit.content_hash,
+          content: d1Hit.content,
+          input_hash: d1Hit.input_hash,
+          created: d1Hit.created_at,
+          hits: d1Hit.hits + 1,
+          semanticMass: d1Hit.semantic_mass,
+          resonanceStrength: d1Hit.resonance_strength + MORPHIC_LEARNING_RATE,
+          lastResonance: Date.now(),
+          parent_id: d1Hit.parent_id || null,
+          child_ids: [],
+          role: d1Hit.role as CachedTeep["role"],
+          turn: d1Hit.turn,
+          boundary: d1Hit.boundary as CachedTeep["boundary"],
+        };
+        // Insert into all in-memory indexes
+        teepLedger.set(d1Hit.content_hash, restoredTeep);
+        basinIndex.set(inputHash, d1Hit.content_hash);
+        gridInsert(restoredTeep.signature, d1Hit.content_hash);
+        if (restoredTeep.boundary) holoGridInsert(restoredTeep.boundary, d1Hit.content_hash);
+        cacheHits++;
+        agfBasinHits++;
+        agfApiCallsAvoided++;
+        // Update D1 hit count async
+        d1PersistHitUpdate(d1Hit.content_hash, restoredTeep.hits, restoredTeep.resonanceStrength, restoredTeep.semanticMass).catch(() => {});
+        d1PersistStats("hit").catch(() => {});
+        return {
+          type: "BASIN_HIT",
+          content: d1Hit.content,
+          teepId: d1Hit.id,
+          signature: { ...(d1Hit.signature as unknown as InternalSignature), cache_hit: 1 },
+          distance: 0,
+        };
+      }
+    } catch {
+      // D1 lookup failed — fall through to JIT solve
+    }
+  }
+
+  // Step 4: Total miss — JIT solve required
   cacheMisses++;
   agfJitSolves++;
   return { type: "JIT_SOLVE" };
@@ -1482,7 +1547,97 @@ export function commitTeep(
     persistenceFlag = true;
   }
 
+  // v15.0: Async D1 persistence — write TEEP to Cloudflare D1 for cross-user sharing
+  if (isD1Configured()) {
+    const persistData = {
+      id,
+      content_hash: responseHash,
+      input_hash: inputContent ? fnv1aHash(inputContent.toLowerCase()) : undefined,
+      content: responseContent,
+      signature: { ...signature },
+      cbf_all_safe: allSafe,
+      hits: 0,
+      semantic_mass: initialMass,
+      resonance_strength: 0,
+      boundary: teepBoundary ? [...teepBoundary] : undefined,
+      parent_id: parentId || undefined,
+      role: options?.role || undefined,
+      turn: options?.turn || undefined,
+      created_at: Date.now(),
+      last_resonance: Date.now(),
+    };
+    // Fire-and-forget — don't block the response
+    d1PersistTeep(persistData).catch(() => {});
+    if (inputContent) {
+      d1PersistBasinIndex(fnv1aHash(inputContent.toLowerCase()), responseHash, id).catch(() => {});
+    }
+    d1PersistStats("commit").catch(() => {});
+  }
+
   return id;
+}
+
+// ========================================================================
+// v15.0 D1 COLD-START SEEDER — Populate in-memory cache from persistent store
+// ========================================================================
+// Called once on first request to seed hot TEEPs from D1 into RAM.
+// Runs async and non-blocking — subsequent requests benefit from warmed cache.
+// ========================================================================
+
+let d1Seeded = false;
+
+export async function seedFromD1(): Promise<{ teeps: number; basins: number }> {
+  if (d1Seeded || !isD1Configured()) return { teeps: 0, basins: 0 };
+  d1Seeded = true;
+
+  try {
+    const [hotTeeps, basinEntries] = await Promise.all([
+      d1LoadHotTeeps(500),
+      d1LoadBasinIndex(2000),
+    ]);
+
+    let seededTeeps = 0;
+    for (const pt of hotTeeps) {
+      if (teepLedger.has(pt.content_hash)) continue; // Already in memory
+      const sig = pt.signature as unknown as InternalSignature;
+      const teep: CachedTeep = {
+        id: pt.id,
+        signature: sig,
+        cbfResult: { allSafe: pt.cbf_all_safe },
+        content_hash: pt.content_hash,
+        content: pt.content,
+        input_hash: pt.input_hash,
+        created: pt.created_at,
+        hits: pt.hits,
+        semanticMass: pt.semantic_mass,
+        resonanceStrength: pt.resonance_strength,
+        lastResonance: pt.last_resonance,
+        parent_id: pt.parent_id || null,
+        child_ids: [],
+        role: pt.role as CachedTeep["role"],
+        turn: pt.turn,
+        boundary: pt.boundary as CachedTeep["boundary"],
+      };
+      teepLedger.set(pt.content_hash, teep);
+      gridInsert(sig, pt.content_hash);
+      if (teep.boundary) holoGridInsert(teep.boundary, pt.content_hash);
+      seededTeeps++;
+    }
+
+    let seededBasins = 0;
+    for (const entry of basinEntries) {
+      if (!basinIndex.has(entry.inputHash)) {
+        basinIndex.set(entry.inputHash, entry.contentHash);
+        seededBasins++;
+      }
+    }
+
+    console.log(`[TEEP-D1] Cold-start seeded: ${seededTeeps} TEEPs, ${seededBasins} basin entries`);
+    return { teeps: seededTeeps, basins: seededBasins };
+  } catch (err) {
+    console.error("[TEEP-D1] Cold-start seed error:", err);
+    return { teeps: 0, basins: 0 };
+  }
 }
 
 // ========================================================================

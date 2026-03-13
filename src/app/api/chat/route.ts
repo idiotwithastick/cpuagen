@@ -1,4 +1,4 @@
-import { thermosolve, cbfCheck, commitTeep, agfLookup, getEnforcementMetrics, getRecentTeeps, cannonCondition } from "@/lib/enforcement";
+import { thermosolve, cbfCheck, commitTeep, agfLookup, getEnforcementMetrics, getRecentTeeps, cannonCondition, seedFromD1 } from "@/lib/enforcement";
 import { recordEnforcementRequest, recordTeepCached } from "@/lib/security-state";
 
 export const runtime = "nodejs";
@@ -594,8 +594,10 @@ export async function POST(req: Request) {
         // 2. BASIN_HIT → similar input in same basin → serve nearest solve (NO LLM CALL)
         // 3. JIT_SOLVE → total miss → invoke LLM as JIT physics solver
         // ============================================================
+        // v15.0: Seed from D1 on cold start (non-blocking after first call)
+        await seedFromD1();
         const t3 = Date.now();
-        const agfResult = agfLookup(userInput, preSig);
+        const agfResult = await agfLookup(userInput, preSig);
         const t4 = Date.now();
 
         if (agfResult.type === "FULL_HIT" || agfResult.type === "BASIN_HIT") {
