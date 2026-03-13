@@ -233,6 +233,13 @@ async function streamAnthropic(
     messages: nonSystemMsgs,
     max_tokens: 4096,
     stream: true,
+    tools: [
+      {
+        type: "web_search_20250305",
+        name: "web_search",
+        max_uses: 5,
+      },
+    ],
   };
   if (systemText) {
     body.system = systemText;
@@ -279,6 +286,10 @@ async function streamAnthropic(
         if (parsed.type === "content_block_delta" && parsed.delta?.text) {
           fullContent += parsed.delta.text;
           controller.enqueue(encoder.encode(sseEvent({ type: "delta", content: parsed.delta.text })));
+        }
+        // Handle citation blocks from web search tool
+        if (parsed.type === "content_block_delta" && parsed.delta?.type === "citations_delta") {
+          // Citations are part of the text flow — already captured in text deltas
         }
       } catch {
         // skip
@@ -372,7 +383,10 @@ async function streamGoogle(
     };
   }));
 
-  const body: Record<string, unknown> = { contents };
+  const body: Record<string, unknown> = {
+    contents,
+    tools: [{ google_search: {} }],
+  };
   if (systemText) {
     body.systemInstruction = { parts: [{ text: systemText }] };
   }
@@ -434,14 +448,21 @@ async function streamXAI(
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder,
 ) {
-  // xAI uses OpenAI-compatible API
+  // xAI uses OpenAI-compatible API with native search tools
   const res = await fetch("https://api.x.ai/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model, messages, stream: true }),
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: true,
+      tools: [
+        { type: "web_search" },
+      ],
+    }),
   });
 
   if (!res.ok) {
@@ -690,44 +711,21 @@ export async function POST(req: Request) {
           const cannonSig = cannonCondition(preSig);
 
           // ============================================================
-          // v15.1: PASS STATE, NOT WORDS — LLM is a State Renderer
+          // v15.2: NO SYSTEM PROMPT — enforcement is hardcoded in middleware
           // ============================================================
-          // The canonical equation computes all semantics on CPU:
-          //   dψ/dt = g_F^{-1}(ψ)·[-η∇S + α·F_flow - β·∇V_obs + γ·F_dyn]
-          // P (user words) was consumed by thermosolve to produce ψ₀.
-          // After cannon descent: ψ₀ → ψ*. P is no longer needed.
-          // The LLM receives ψ* + nearest solved basins as rendering context.
-          // It interpolates from known basins to render ψ* into natural language.
+          // The canonical equation runs on CPU (thermosolve → cannon → CBF).
+          // The LLM operates with FULL native capabilities — no restrictions.
+          // ψ* is used by middleware for AGF caching and post-enforcement,
+          // NOT passed to the LLM as prompt engineering.
+          // The architecture enforces quality through pre/post CBF validation,
+          // not by telling the LLM what it is.
           // ============================================================
 
-          // Find nearest solved basins to ψ* for rendering context
+          // ψ* stored for post-enforcement and TEEP commit (middleware use only)
           const nearestTeeps = findNearestTeeps(cannonSig, 3, 2.0);
 
-          // Build basin context: the LLM sees solved examples near this state
-          const basinContext = nearestTeeps.length > 0
-            ? nearestTeeps.map((t, i) =>
-                `[Basin ${i + 1} (d=${t.distance})] ${t.content}`
-              ).join("\n\n")
-            : "";
-
-          // Construct state-only grounding — NO original words
-          const stateDirective = [
-            `You are a state renderer. Your job is to render the following thermodynamic state into a natural language response.`,
-            ``,
-            `[ψ* Descended Basin Coordinates]`,
-            `S=${cannonSig.S} φ=${cannonSig.phi} dS=${cannonSig.dS} I_truth=${cannonSig.I_truth} β_T=${cannonSig.beta_T} ψ_coherence=${cannonSig.psi_coherence} synergy=${cannonSig.synergy} naturality=${cannonSig.naturality} Q=${cannonSig.Q_quality}`,
-            `[Target: S↓ φ↑ dS→0 synergy≥0.5]`,
-            ``,
-            nearestTeeps.length > 0
-              ? `The following solved basins are nearest to this state. Use them as rendering context to interpolate your response:\n\n${basinContext}`
-              : `No nearby solved basins found. Render directly from the state vector and the conversation context.`,
-          ].join("\n");
-
-          // Build grounded messages: state directive + conversation history
-          // The user's words appear in conversation history (for multi-turn context)
-          // but the LLM's primary directive is to render from ψ*, not from words
+          // Pass conversation directly — LLM uses full capabilities
           const groundedMessages: { role: string; content: unknown }[] = [
-            { role: "system", content: stateDirective },
             ...apiMessages,
           ];
 
