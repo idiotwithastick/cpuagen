@@ -799,7 +799,7 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, loading]);
 
-  // Auto-open Canvas+Preview for HTML responses when canvas is not open
+  // Auto-open Canvas for ANY code block response (not just HTML)
   useEffect(() => {
     if (canvasOpen || loading) return;
     const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && m.content);
@@ -807,13 +807,24 @@ export default function ChatPage() {
     // Don't re-auto-open for the same message (prevents loop with canvasOpen toggle)
     const msgKey = lastAssistant.content.slice(0, 100);
     if (autoOpenedForRef.current === msgKey) return;
-    const htmlMatch = lastAssistant.content.match(/```(html|htm|svg)\n([\s\S]*?)```/);
-    if (htmlMatch && htmlMatch[2].length > 50) {
+
+    // Find all code blocks in the response
+    const allMatches = [...lastAssistant.content.matchAll(/```(\w*)\n([\s\S]*?)```/g)];
+    if (allMatches.length === 0) return;
+
+    // Prefer HTML (gets preview tab), otherwise take the largest code block
+    const htmlMatch = allMatches.find(([, lang]) => /^(html|htm|svg)$/i.test(lang || ""));
+    const largestCode = allMatches.reduce((a, b) => (a[2].length >= b[2].length ? a : b));
+
+    // Auto-open if code block has 3+ lines (meaningful code, not a one-liner)
+    const best = htmlMatch || largestCode;
+    const [, lang, code] = best;
+    if (code.split("\n").length >= 3) {
       autoOpenedForRef.current = msgKey;
-      setCanvasCode(htmlMatch[2]);
-      setCanvasLang(htmlMatch[1]);
+      setCanvasCode(code);
+      setCanvasLang(lang || "plaintext");
       setCanvasOpen(true);
-      setActiveTab("preview");
+      setActiveTab(htmlMatch ? "preview" : "canvas");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, loading]);
