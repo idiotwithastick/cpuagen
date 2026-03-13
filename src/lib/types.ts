@@ -1,4 +1,4 @@
-export type Provider = "anthropic" | "openai" | "google" | "xai" | "demo";
+export type Provider = "anthropic" | "openai" | "google" | "xai" | "workers-ai" | "demo";
 
 export interface ProviderConfig {
   id: Provider;
@@ -202,6 +202,20 @@ export const PROVIDERS: ProviderConfig[] = [
       { id: "gpt-4o-mini", name: "GPT-4o Mini" },
     ],
     defaultModel: "gemini-2.0-flash",
+    apiKeyPlaceholder: "",
+    noKeyRequired: true,
+  },
+  {
+    id: "workers-ai",
+    name: "Free (Cloudflare AI)",
+    models: [
+      { id: "@cf/meta/llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout 17B" },
+      { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", name: "Llama 3.3 70B" },
+      { id: "@cf/deepseek/deepseek-r1-distill-qwen-32b", name: "DeepSeek R1 32B (Reasoning)" },
+      { id: "@cf/qwen/qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B" },
+      { id: "@cf/mistral/mistral-small-3.1-24b-instruct", name: "Mistral Small 3.1 24B" },
+    ],
+    defaultModel: "@cf/meta/llama-4-scout-17b-16e-instruct",
     apiKeyPlaceholder: "",
     noKeyRequired: true,
   },

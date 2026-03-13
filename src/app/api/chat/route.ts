@@ -506,6 +506,79 @@ async function streamXAI(
   return fullContent;
 }
 
+// ─── Cloudflare Workers AI (OpenAI-compatible endpoint) ───
+
+async function streamWorkersAI(
+  messages: { role: string; content: unknown }[],
+  model: string,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder,
+): Promise<string> {
+  const cfAccountId = process.env.CF_ACCOUNT_ID;
+  const cfApiToken = process.env.CF_API_TOKEN;
+
+  if (!cfAccountId || !cfApiToken) {
+    controller.enqueue(encoder.encode(sseEvent({ type: "error", message: "Workers AI not configured on server" })));
+    return "";
+  }
+
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/ai/v1/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfApiToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: true,
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    controller.enqueue(encoder.encode(sseEvent({ type: "error", message: `Workers AI error: ${res.status} - ${err}` })));
+    return "";
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) return "";
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullContent = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6).trim();
+      if (data === "[DONE]" || !data) continue;
+
+      try {
+        const parsed = JSON.parse(data);
+        const delta = parsed.choices?.[0]?.delta?.content;
+        if (delta) {
+          fullContent += delta;
+          controller.enqueue(encoder.encode(sseEvent({ type: "delta", content: delta })));
+        }
+      } catch {
+        // skip
+      }
+    }
+  }
+  return fullContent;
+}
+
 export async function POST(req: Request) {
   let body: ChatRequest;
   try {
@@ -541,6 +614,10 @@ export async function POST(req: Request) {
     }
     provider = mapping.provider;
     apiKey = serverKey;
+  } else if (rawProvider === "workers-ai") {
+    // Workers AI: free tier, uses server-side CF credentials
+    provider = "workers-ai";
+    apiKey = ""; // not needed — uses CF_API_TOKEN server-side
   } else if (!clientKey) {
     return new Response("Missing API key", { status: 400 });
   }
@@ -761,6 +838,9 @@ export async function POST(req: Request) {
               break;
             case "xai":
               fullContent = await streamXAI(groundedMessages, apiKey, model, controller, encoder);
+              break;
+            case "workers-ai":
+              fullContent = await streamWorkersAI(groundedMessages, model, controller, encoder);
               break;
             default:
               controller.enqueue(encoder.encode(sseEvent({ type: "error", message: `Unknown provider: ${provider}` })));
