@@ -249,8 +249,8 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
             {enforcement.agfHitType && (
               <>
                 <span className="text-muted">|</span>
-                <span className={enforcement.agfHitType === "FULL_HIT" ? "text-success" : enforcement.agfHitType === "PARTIAL_HIT" ? "text-accent-light" : "text-muted"}>
-                  {enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHE" : enforcement.agfHitType === "PARTIAL_HIT" ? "\u{1F50C} BRIDGE" : "\u{1F9EA} JIT"}
+                <span className={enforcement.agfHitType === "FULL_HIT" || enforcement.agfHitType === "BASIN_HIT" ? "text-success" : enforcement.agfHitType === "PARTIAL_HIT" ? "text-accent-light" : "text-muted"}>
+                  {enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHE" : enforcement.agfHitType === "BASIN_HIT" ? "\u26A1 BASIN" : enforcement.agfHitType === "PARTIAL_HIT" ? "\u{1F50C} BRIDGE" : "\u{1F9EA} JIT"}
                 </span>
               </>
             )}

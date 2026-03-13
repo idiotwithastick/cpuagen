@@ -137,7 +137,7 @@ function EnforcementMini({ enforcement }: { enforcement?: EnforcementResult }) {
       <span>{allSafe ? "\u2713" : "\u2717"}</span>
       {hitType && (
         <span>
-          {hitType === "FULL_HIT" ? "\u26A1" : hitType === "PARTIAL_HIT" ? "\u{1F50C}" : "\u{1F9EA}"}
+          {hitType === "FULL_HIT" ? "\u26A1" : hitType === "BASIN_HIT" ? "\u26A1" : hitType === "PARTIAL_HIT" ? "\u{1F50C}" : "\u{1F9EA}"}
         </span>
       )}
       {timing?.total_ms !== undefined && (

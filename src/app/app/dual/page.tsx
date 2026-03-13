@@ -30,7 +30,7 @@ function EnforcementMini({ enforcement }: { enforcement?: EnforcementResult }) {
       allSafe ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
     }`}>
       {allSafe ? "\u2713" : "\u2717"}
-      {enforcement.agfHitType === "FULL_HIT" ? " \u26A1" : enforcement.agfHitType === "JIT_SOLVE" ? " \u{1F9EA}" : ""}
+      {enforcement.agfHitType === "FULL_HIT" || enforcement.agfHitType === "BASIN_HIT" ? " \u26A1" : enforcement.agfHitType === "JIT_SOLVE" ? " \u{1F9EA}" : ""}
       {timing?.total_ms !== undefined && ` ${timing.total_ms}ms`}
     </span>
   );

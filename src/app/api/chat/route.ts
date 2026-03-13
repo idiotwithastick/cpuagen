@@ -766,6 +766,7 @@ export async function POST(req: Request) {
               break;
             default:
               controller.enqueue(encoder.encode(sseEvent({ type: "error", message: `Unknown provider: ${provider}` })));
+              break;
           }
 
           // POST-ENFORCEMENT on JIT solve output
