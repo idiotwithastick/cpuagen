@@ -689,6 +689,33 @@ export async function POST(req: Request) {
           // post-enforcement grounding (compressed entropy, boosted coherence)
           const cannonSig = cannonCondition(preSig);
 
+          // ============================================================
+          // v15.0: INJECT ψ* INTO LLM CALL — PASS STATE, NOT WORDS
+          // ============================================================
+          // The descended state ψ* (cannon-conditioned signature) is injected
+          // as a system-level grounding directive. The LLM receives the
+          // thermodynamic basin coordinates that its response must converge
+          // toward. This is the critical bridge between physics and generation:
+          //   ψ₀ = thermosolve(prompt)
+          //   ψ* = cannonCondition(ψ₀)   ← descended via golden-ratio chain
+          //   LLM(prompt, ψ*) → response  ← generation grounded in ψ*
+          // Without this, the LLM receives raw words with no physics grounding.
+          // ============================================================
+          const psiGrounding = [
+            `[SSD-RCI ψ* State Vector — Descended Basin Coordinates]`,
+            `S=${cannonSig.S} φ=${cannonSig.phi} dS=${cannonSig.dS} `,
+            `I_truth=${cannonSig.I_truth} β_T=${cannonSig.beta_T} `,
+            `ψ_coherence=${cannonSig.psi_coherence} synergy=${cannonSig.synergy} `,
+            `naturality=${cannonSig.naturality} Q=${cannonSig.Q_quality}`,
+            `[Target: Converge response toward S↓ φ↑ dS→0 synergy≥0.5]`,
+          ].join("");
+
+          // Prepend ψ* as system message so LLM generation is physics-grounded
+          const groundedMessages: { role: string; content: unknown }[] = [
+            { role: "system", content: psiGrounding },
+            ...apiMessages,
+          ];
+
           // Send AGF miss notification with cannon stats
           const tJitStart = Date.now();
           controller.enqueue(
@@ -707,20 +734,20 @@ export async function POST(req: Request) {
             })),
           );
 
-          // Stream from LLM (JIT physics solver)
+          // Stream from LLM (JIT physics solver) — grounded in ψ*
           let fullContent = "";
           switch (provider) {
             case "anthropic":
-              fullContent = await streamAnthropic(apiMessages, apiKey, model, controller, encoder);
+              fullContent = await streamAnthropic(groundedMessages, apiKey, model, controller, encoder);
               break;
             case "openai":
-              fullContent = await streamOpenAI(apiMessages, apiKey, model, controller, encoder);
+              fullContent = await streamOpenAI(groundedMessages, apiKey, model, controller, encoder);
               break;
             case "google":
-              fullContent = await streamGoogle(apiMessages, apiKey, model, controller, encoder, attachments);
+              fullContent = await streamGoogle(groundedMessages, apiKey, model, controller, encoder, attachments);
               break;
             case "xai":
-              fullContent = await streamXAI(apiMessages, apiKey, model, controller, encoder);
+              fullContent = await streamXAI(groundedMessages, apiKey, model, controller, encoder);
               break;
             default:
               controller.enqueue(encoder.encode(sseEvent({ type: "error", message: `Unknown provider: ${provider}` })));
