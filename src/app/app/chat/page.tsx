@@ -10,65 +10,6 @@ import type { ConsoleEntry } from "@/components/Canvas";
 const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 const Preview = dynamic(() => import("@/components/Preview"), { ssr: false });
 const GreyBeamCanvas = dynamic(() => import("@/components/GreyBeamCanvas"), { ssr: false });
-const ArtifactPanel = dynamic(() => import("@/components/ArtifactPanel"), { ssr: false });
-const DualChat = dynamic(() => import("@/components/layouts/DualChat"), { ssr: false });
-const ArenaChat = dynamic(() => import("@/components/layouts/ArenaChat"), { ssr: false });
-const MultiChat = dynamic(() => import("@/components/layouts/MultiChat"), { ssr: false });
-
-/* ─── Layout mode type ─── */
-type LayoutMode = "chat" | "dual" | "arena" | "multi";
-
-/* ─── Artifact file type ─── */
-interface ArtifactFile {
-  id: string;
-  name: string;
-  language: string;
-  content: string;
-  previousContent?: string;
-}
-
-/* ─── Extract code blocks with filenames from AI responses ─── */
-function extractCodeBlocksToFiles(
-  text: string,
-  existingFiles: ArtifactFile[],
-): { displayText: string; newFiles: ArtifactFile[]; updatedIds: string[] } {
-  const filePattern = /```(\w+)\s+([\w./-]+)\n([\s\S]*?)```/g;
-  let displayText = text;
-  const newFiles: ArtifactFile[] = [];
-  const updatedIds: string[] = [];
-
-  const matches = [...text.matchAll(filePattern)];
-  for (const match of matches) {
-    const [fullMatch, lang, filename, code] = match;
-    const existing = existingFiles.find((f) => f.name === filename);
-    if (existing) {
-      // Update existing file
-      existing.previousContent = existing.content;
-      existing.content = code.trimEnd();
-      updatedIds.push(existing.id);
-      displayText = displayText.replace(
-        fullMatch,
-        `[📄 ${filename} — Updated] [Open]`,
-      );
-    } else {
-      // Create new file
-      const newFile: ArtifactFile = {
-        id: crypto.randomUUID(),
-        name: filename,
-        language: lang,
-        content: code.trimEnd(),
-      };
-      newFiles.push(newFile);
-      updatedIds.push(newFile.id);
-      displayText = displayText.replace(
-        fullMatch,
-        `[📄 ${filename} — Created] [Open]`,
-      );
-    }
-  }
-
-  return { displayText, newFiles, updatedIds };
-}
 
 /* ─── HTML / Markdown detection ─── */
 function isHtmlContent(code: string, lang: string): boolean {
@@ -608,7 +549,7 @@ function MessageBubble({ message, onOpenCanvas, onOpenPreview, onOpenInMarkup, o
           }`}
         >
           {message.content ? (
-            isUser ? message.content : renderMarkdown(message.displayContent || message.content, onOpenCanvas, onOpenPreview, onAnnotationCommand)
+            isUser ? message.content : renderMarkdown(message.content, onOpenCanvas, onOpenPreview, onAnnotationCommand)
           ) : (
             <span className="inline-flex gap-1">
               <span className="w-1.5 h-1.5 bg-accent-light rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -729,16 +670,12 @@ export default function ChatPage() {
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasCode, setCanvasCode] = useState("");
   const [canvasLang, setCanvasLang] = useState("");
-  const [activeTab, setActiveTab] = useState<"canvas" | "preview" | "markup" | "files">("canvas");
+  const [activeTab, setActiveTab] = useState<"canvas" | "preview" | "markup">("canvas");
   const [consoleOutput, setConsoleOutput] = useState<ConsoleEntry[]>([]);
   const [markupPdfData, setMarkupPdfData] = useState<ArrayBuffer | null>(null);
   const [markupPdfName, setMarkupPdfName] = useState("");
   const [markupAnnotations, setMarkupAnnotations] = useState<PageAnnotations>({});
   const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([]);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>("chat");
-  const [artifactFiles, setArtifactFiles] = useState<ArtifactFile[]>([]);
-  const [activeArtifactFileId, setActiveArtifactFileId] = useState<string | null>(null);
-  const [artifactOpen, setArtifactOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -1029,41 +966,6 @@ export default function ChatPage() {
     setActiveTab("markup");
   }, []);
 
-  /* ─── Artifact file handlers ─── */
-  const handleArtifactFileCreate = useCallback((name: string, content: string, language: string) => {
-    const newFile: ArtifactFile = { id: crypto.randomUUID(), name, language, content };
-    setArtifactFiles((prev) => [...prev, newFile]);
-    setActiveArtifactFileId(newFile.id);
-    setArtifactOpen(true);
-  }, []);
-
-  const handleArtifactFileUpdate = useCallback((id: string, content: string) => {
-    setArtifactFiles((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, previousContent: f.content, content } : f)),
-    );
-  }, []);
-
-  const handleArtifactFileDelete = useCallback((id: string) => {
-    setArtifactFiles((prev) => {
-      const next = prev.filter((f) => f.id !== id);
-      if (activeArtifactFileId === id) {
-        setActiveArtifactFileId(next.length > 0 ? next[0].id : null);
-      }
-      return next;
-    });
-  }, [activeArtifactFileId]);
-
-  const handleCodeGenerated = useCallback((filename: string, content: string, language: string) => {
-    const existing = artifactFiles.find((f) => f.name === filename);
-    if (existing) {
-      handleArtifactFileUpdate(existing.id, content);
-      setActiveArtifactFileId(existing.id);
-    } else {
-      handleArtifactFileCreate(filename, content, language);
-    }
-    setArtifactOpen(true);
-  }, [artifactFiles, handleArtifactFileUpdate, handleArtifactFileCreate]);
-
   // sendMessageRef lets handleCanvasInstruction call sendMessage without circular deps
   const sendMessageRef = useRef<(text: string) => void>(() => {});
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1078,15 +980,6 @@ export default function ChatPage() {
     canvasInstructionRef.current = instruction;
     sendMessageRef.current(prompt);
   }, [canvasLang]);
-
-  const handleArtifactInlineEdit = useCallback((instruction: string, fileContent: string, fileName: string) => {
-    const file = artifactFiles.find((f) => f.name === fileName);
-    const lang = file?.language || "text";
-    const prompt = `[CANVAS EDIT REQUEST] Here is the current code in the Canvas editor. Please provide the complete updated code (not a diff):\n\n\`\`\`${lang} ${fileName}\n${fileContent}\n\`\`\`\n\n${instruction}`;
-    isCanvasEditRef.current = true;
-    canvasInstructionRef.current = instruction;
-    sendMessageRef.current(prompt);
-  }, [artifactFiles]);
 
   const abortStream = useCallback(() => {
     if (abortControllerRef.current) {
@@ -1402,55 +1295,18 @@ export default function ChatPage() {
       if (isCanvasEditRef.current) {
         isCanvasEditRef.current = false;
         setMessages((prev) => {
-          const aMsg = prev.find((m) => m.id === assistantId);
-          if (aMsg?.content) {
-            const codeBlockMatch = aMsg.content.match(/```[\w]*\n([\s\S]*?)```/);
+          const assistantMsg = prev.find((m) => m.id === assistantId);
+          if (assistantMsg?.content) {
+            const codeBlockMatch = assistantMsg.content.match(/```[\w]*\n([\s\S]*?)```/);
             if (codeBlockMatch) {
               setCanvasCode(codeBlockMatch[1].trimEnd());
-            }
-            // Also update artifact file if the edit was for an artifact
-            const filenameMatch = aMsg.content.match(/```(\w+)\s+([\w./-]+)\n([\s\S]*?)```/);
-            if (filenameMatch) {
-              const [, , fname, fcode] = filenameMatch;
-              setArtifactFiles((prevFiles) => {
-                const target = prevFiles.find((f) => f.name === fname);
-                if (target) {
-                  return prevFiles.map((f) =>
-                    f.id === target.id ? { ...f, previousContent: f.content, content: fcode.trimEnd() } : f,
-                  );
-                }
-                return prevFiles;
-              });
             }
           }
           return prev;
         });
       }
-
-      // v15.0: Extract code blocks with filenames into artifact files
-      setMessages((prev) => {
-        const aMsg = prev.find((m) => m.id === assistantId);
-        if (aMsg?.content) {
-          const { displayText, newFiles, updatedIds } = extractCodeBlocksToFiles(
-            aMsg.content,
-            artifactFiles,
-          );
-          if (newFiles.length > 0 || updatedIds.length > 0) {
-            setArtifactFiles((prevFiles) => [...prevFiles, ...newFiles]);
-            setActiveArtifactFileId(updatedIds[updatedIds.length - 1]);
-            setArtifactOpen(true);
-            setActiveTab("files");
-            if (displayText !== aMsg.content) {
-              return prev.map((m) =>
-                m.id === assistantId ? { ...m, displayContent: displayText } : m,
-              );
-            }
-          }
-        }
-        return prev;
-      });
     }
-  }, [input, loading, isConfigured, messages, provider, apiKey, model, systemPrompt, activeConvId, pendingAttachments, artifactFiles]);
+  }, [input, loading, isConfigured, messages, provider, apiKey, model, systemPrompt, activeConvId, pendingAttachments]);
 
   sendMessageRef.current = sendMessage;
 
@@ -1494,12 +1350,10 @@ export default function ChatPage() {
     );
   }
 
-  const rightPanelOpen = canvasOpen || artifactOpen;
-
   return (
-    <div className={`flex-1 flex min-h-0 ${rightPanelOpen ? "" : "flex-col"}`}>
-    {/* Chat pane — shows when layoutMode is "chat", otherwise render layout component */}
-    <div className={`flex flex-col min-h-0 relative ${rightPanelOpen ? "w-1/3 border-r border-border max-md:hidden" : "flex-1"}`}>
+    <div className={`flex-1 flex min-h-0 ${canvasOpen ? "" : "flex-col"}`}>
+    {/* Chat pane */}
+    <div className={`flex flex-col min-h-0 relative ${canvasOpen ? "w-1/3 border-r border-border max-md:hidden" : "flex-1"}`}>
       {/* Chat header */}
       <div className="h-12 flex items-center justify-between px-4 border-b border-border bg-surface/30 shrink-0">
         <div className="flex items-center gap-3">
@@ -1536,18 +1390,6 @@ export default function ChatPage() {
           </select>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            value={layoutMode}
-            onChange={(e) => setLayoutMode(e.target.value as LayoutMode)}
-            disabled={loading}
-            className="px-2 py-1 rounded-md text-[10px] font-mono text-muted bg-surface border border-border hover:border-accent/30 hover:text-foreground transition-colors cursor-pointer disabled:opacity-50 outline-none"
-            title="Layout mode"
-          >
-            <option value="chat">Chat</option>
-            <option value="dual">Dual</option>
-            <option value="arena">Arena</option>
-            <option value="multi">Multi</option>
-          </select>
           <button
             onClick={startNewChat}
             disabled={loading}
@@ -1610,21 +1452,6 @@ export default function ChatPage() {
         </>
       )}
 
-      {/* Layout mode content */}
-      {layoutMode !== "chat" ? (
-        <div className="flex-1 min-h-0 overflow-hidden">
-          {layoutMode === "dual" && (
-            <DualChat settings={settings} onCodeGenerated={handleCodeGenerated} />
-          )}
-          {layoutMode === "arena" && (
-            <ArenaChat settings={settings} onCodeGenerated={handleCodeGenerated} />
-          )}
-          {layoutMode === "multi" && (
-            <MultiChat settings={settings} onCodeGenerated={handleCodeGenerated} />
-          )}
-        </div>
-      ) : (
-      <>
       {/* Messages */}
       <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="flex-1 overflow-y-auto p-4 sm:p-6">
         {messages.length === 0 && (
@@ -1807,42 +1634,20 @@ export default function ChatPage() {
             >
               Preview
             </button>
-            <button
-              onClick={() => { setArtifactOpen(true); setActiveTab("files"); }}
-              className="text-blue-400/70 hover:text-blue-400 cursor-pointer"
-              title="Open artifact files"
-            >
-              Files{artifactFiles.length > 0 ? ` (${artifactFiles.length})` : ""}
-            </button>
           </div>
           <span>Enforcement: ON {"\u00B7"} all barriers active</span>
         </div>
       </div>
-      </>
-      )}
     </div>{/* end chat pane */}
 
-    {/* Canvas + Preview + Files pane */}
-    {rightPanelOpen && (
+    {/* Canvas + Preview pane */}
+    {canvasOpen && (
       <div className="w-2/3 min-h-0 flex flex-col max-md:fixed max-md:inset-0 max-md:w-full max-md:z-30 max-md:bg-background">
         {/* Tab bar */}
         <div className="h-10 flex items-center justify-between px-2 border-b border-border bg-surface/30 shrink-0">
           <div className="flex items-center gap-1">
             <button
-              onClick={() => { setActiveTab("files"); setArtifactOpen(true); }}
-              className={`px-3 py-1.5 rounded-md text-[11px] font-mono transition-colors cursor-pointer flex items-center gap-1.5 ${
-                activeTab === "files"
-                  ? "bg-blue-500/15 text-blue-400 border border-blue-500/25"
-                  : "text-muted hover:text-foreground hover:bg-surface-light"
-              }`}
-            >
-              Files
-              {artifactFiles.length > 0 && (
-                <span className="px-1 py-0.5 rounded text-[9px] bg-blue-500/20 text-blue-400 font-semibold">{artifactFiles.length}</span>
-              )}
-            </button>
-            <button
-              onClick={() => { setActiveTab("canvas"); setCanvasOpen(true); }}
+              onClick={() => setActiveTab("canvas")}
               className={`px-3 py-1.5 rounded-md text-[11px] font-mono transition-colors cursor-pointer ${
                 activeTab === "canvas"
                   ? "bg-accent/15 text-accent-light border border-accent/25"
@@ -1852,7 +1657,7 @@ export default function ChatPage() {
               Canvas
             </button>
             <button
-              onClick={() => { setActiveTab("preview"); setCanvasOpen(true); }}
+              onClick={() => setActiveTab("preview")}
               className={`px-3 py-1.5 rounded-md text-[11px] font-mono transition-colors cursor-pointer flex items-center gap-1.5 ${
                 activeTab === "preview"
                   ? "bg-success/15 text-success border border-success/25"
@@ -1865,7 +1670,7 @@ export default function ChatPage() {
               )}
             </button>
             <button
-              onClick={() => { setActiveTab("markup"); setCanvasOpen(true); }}
+              onClick={() => setActiveTab("markup")}
               className={`px-3 py-1.5 rounded-md text-[11px] font-mono transition-colors cursor-pointer flex items-center gap-1.5 ${
                 activeTab === "markup"
                   ? "bg-amber-500/15 text-amber-400 border border-amber-500/25"
@@ -1877,7 +1682,7 @@ export default function ChatPage() {
             </button>
           </div>
           <button
-            onClick={() => { setCanvasOpen(false); setArtifactOpen(false); }}
+            onClick={() => setCanvasOpen(false)}
             className="p-1.5 rounded-md text-muted hover:text-foreground hover:bg-surface-light transition-colors cursor-pointer"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1888,20 +1693,7 @@ export default function ChatPage() {
 
         {/* Tab content */}
         <div className="flex-1 min-h-0">
-          {activeTab === "files" ? (
-            <ArtifactPanel
-              files={artifactFiles}
-              activeFileId={activeArtifactFileId}
-              onFileSelect={setActiveArtifactFileId}
-              onFileCreate={handleArtifactFileCreate}
-              onFileUpdate={handleArtifactFileUpdate}
-              onFileDelete={handleArtifactFileDelete}
-              onClose={() => { setArtifactOpen(false); if (!canvasOpen) setActiveTab("canvas"); }}
-              onInlineEdit={handleArtifactInlineEdit}
-              loading={loading}
-              onStopGeneration={abortStream}
-            />
-          ) : activeTab === "canvas" ? (
+          {activeTab === "canvas" ? (
             <Canvas
               code={canvasCode}
               language={canvasLang}
