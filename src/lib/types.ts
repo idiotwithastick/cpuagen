@@ -119,6 +119,11 @@ export interface EnforcementResult {
   post?: EnforcementStage;
   agfHitType?: string;
   timing?: PerformanceTiming;
+  tokensSaved?: {
+    input: number;
+    output: number;
+    total: number;
+  };
 }
 
 export interface Conversation {

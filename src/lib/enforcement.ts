@@ -938,8 +938,10 @@ export async function agfLookup(inputContent: string, precomputedSig?: InternalS
       reinforceMorphicField(cached.signature);
       // v15.0: Async D1 hit update — keep persistent store in sync
       if (isD1Configured()) {
-        d1PersistHitUpdate(cached.content_hash, cached.hits, cached.resonanceStrength, cached.semanticMass).catch(() => {});
-        d1PersistStats("hit").catch(() => {});
+        d1PersistHitUpdate(cached.content_hash, cached.hits, cached.resonanceStrength, cached.semanticMass)
+          .catch((err) => console.error("[TEEP-D1] FULL_HIT update failed:", err));
+        d1PersistStats("hit")
+          .catch((err) => console.error("[TEEP-D1] Stats hit update failed:", err));
       }
       return {
         type: "FULL_HIT",
@@ -1113,8 +1115,10 @@ export async function agfLookup(inputContent: string, precomputedSig?: InternalS
         agfBasinHits++;
         agfApiCallsAvoided++;
         // Update D1 hit count async
-        d1PersistHitUpdate(d1Hit.content_hash, restoredTeep.hits, restoredTeep.resonanceStrength, restoredTeep.semanticMass).catch(() => {});
-        d1PersistStats("hit").catch(() => {});
+        d1PersistHitUpdate(d1Hit.content_hash, restoredTeep.hits, restoredTeep.resonanceStrength, restoredTeep.semanticMass)
+          .catch((err) => console.error("[TEEP-D1] D1_FALLBACK hit update failed:", err));
+        d1PersistStats("hit")
+          .catch((err) => console.error("[TEEP-D1] D1_FALLBACK stats update failed:", err));
         return {
           type: "BASIN_HIT",
           content: d1Hit.content,
@@ -1123,8 +1127,9 @@ export async function agfLookup(inputContent: string, precomputedSig?: InternalS
           distance: 0,
         };
       }
-    } catch {
-      // D1 lookup failed — fall through to JIT solve
+    } catch (err) {
+      console.error("[TEEP-D1] D1 fallback lookup failed:", err);
+      // Fall through to JIT solve
     }
   }
 
@@ -1455,13 +1460,13 @@ export function generateTeepId(): string {
 // v13.0: Track last committed TEEP for causal chaining
 let lastCommittedTeepId: string | null = null;
 
-export function commitTeep(
+export async function commitTeep(
   responseContent: string,
   signature: InternalSignature,
   allSafe: boolean,
   inputContent?: string,
   options?: { role?: CachedTeep["role"]; turn?: number; parent_id?: string },
-): string {
+): Promise<string> {
   const id = generateTeepId();
   const responseHash = fnv1aHash(responseContent.toLowerCase());
 
@@ -1566,12 +1571,20 @@ export function commitTeep(
       created_at: Date.now(),
       last_resonance: Date.now(),
     };
-    // Fire-and-forget — don't block the response
-    d1PersistTeep(persistData).catch(() => {});
+    // AWAIT D1 writes — critical for cross-instance persistence
+    // Without awaiting, Vercel kills the function before writes complete
+    const d1Promises: Promise<void>[] = [
+      d1PersistTeep(persistData).catch((err) => console.error("[TEEP-D1] Persist TEEP failed:", err)),
+      d1PersistStats("commit").catch((err) => console.error("[TEEP-D1] Stats update failed:", err)),
+    ];
     if (inputContent) {
-      d1PersistBasinIndex(fnv1aHash(inputContent.toLowerCase()), responseHash, id).catch(() => {});
+      d1Promises.push(
+        d1PersistBasinIndex(fnv1aHash(inputContent.toLowerCase()), responseHash, id)
+          .catch((err) => console.error("[TEEP-D1] Basin index persist failed:", err)),
+      );
     }
-    d1PersistStats("commit").catch(() => {});
+    await Promise.allSettled(d1Promises);
+    console.log(`[TEEP-D1] Committed ${id} to D1 (${d1Promises.length} writes)`);
   }
 
   return id;
@@ -1585,59 +1598,71 @@ export function commitTeep(
 // ========================================================================
 
 let d1Seeded = false;
+let d1SeedInProgress: Promise<{ teeps: number; basins: number }> | null = null;
 
 export async function seedFromD1(): Promise<{ teeps: number; basins: number }> {
   if (d1Seeded || !isD1Configured()) return { teeps: 0, basins: 0 };
-  d1Seeded = true;
+  // Deduplicate concurrent calls — return same promise if already in-flight
+  if (d1SeedInProgress) return d1SeedInProgress;
 
-  try {
-    const [hotTeeps, basinEntries] = await Promise.all([
-      d1LoadHotTeeps(500),
-      d1LoadBasinIndex(2000),
-    ]);
+  d1SeedInProgress = (async () => {
+    try {
+      console.log("[TEEP-D1] Cold-start seed beginning...");
+      const [hotTeeps, basinEntries] = await Promise.all([
+        d1LoadHotTeeps(500),
+        d1LoadBasinIndex(2000),
+      ]);
 
-    let seededTeeps = 0;
-    for (const pt of hotTeeps) {
-      if (teepLedger.has(pt.content_hash)) continue; // Already in memory
-      const sig = pt.signature as unknown as InternalSignature;
-      const teep: CachedTeep = {
-        id: pt.id,
-        signature: sig,
-        cbfResult: { allSafe: pt.cbf_all_safe },
-        content_hash: pt.content_hash,
-        content: pt.content,
-        input_hash: pt.input_hash,
-        created: pt.created_at,
-        hits: pt.hits,
-        semanticMass: pt.semantic_mass,
-        resonanceStrength: pt.resonance_strength,
-        lastResonance: pt.last_resonance,
-        parent_id: pt.parent_id || null,
-        child_ids: [],
-        role: pt.role as CachedTeep["role"],
-        turn: pt.turn,
-        boundary: pt.boundary as CachedTeep["boundary"],
-      };
-      teepLedger.set(pt.content_hash, teep);
-      gridInsert(sig, pt.content_hash);
-      if (teep.boundary) holoGridInsert(teep.boundary, pt.content_hash);
-      seededTeeps++;
-    }
-
-    let seededBasins = 0;
-    for (const entry of basinEntries) {
-      if (!basinIndex.has(entry.inputHash)) {
-        basinIndex.set(entry.inputHash, entry.contentHash);
-        seededBasins++;
+      let seededTeeps = 0;
+      for (const pt of hotTeeps) {
+        if (teepLedger.has(pt.content_hash)) continue; // Already in memory
+        const sig = pt.signature as unknown as InternalSignature;
+        const teep: CachedTeep = {
+          id: pt.id,
+          signature: sig,
+          cbfResult: { allSafe: pt.cbf_all_safe },
+          content_hash: pt.content_hash,
+          content: pt.content,
+          input_hash: pt.input_hash,
+          created: pt.created_at,
+          hits: pt.hits,
+          semanticMass: pt.semantic_mass,
+          resonanceStrength: pt.resonance_strength,
+          lastResonance: pt.last_resonance,
+          parent_id: pt.parent_id || null,
+          child_ids: [],
+          role: pt.role as CachedTeep["role"],
+          turn: pt.turn,
+          boundary: pt.boundary as CachedTeep["boundary"],
+        };
+        teepLedger.set(pt.content_hash, teep);
+        gridInsert(sig, pt.content_hash);
+        if (teep.boundary) holoGridInsert(teep.boundary, pt.content_hash);
+        seededTeeps++;
       }
-    }
 
-    console.log(`[TEEP-D1] Cold-start seeded: ${seededTeeps} TEEPs, ${seededBasins} basin entries`);
-    return { teeps: seededTeeps, basins: seededBasins };
-  } catch (err) {
-    console.error("[TEEP-D1] Cold-start seed error:", err);
-    return { teeps: 0, basins: 0 };
-  }
+      let seededBasins = 0;
+      for (const entry of basinEntries) {
+        if (!basinIndex.has(entry.inputHash)) {
+          basinIndex.set(entry.inputHash, entry.contentHash);
+          seededBasins++;
+        }
+      }
+
+      // Only mark seeded on SUCCESS — allows retry on failure
+      d1Seeded = true;
+      console.log(`[TEEP-D1] Cold-start seeded: ${seededTeeps} TEEPs, ${seededBasins} basin entries (from D1 pool of ${hotTeeps.length} TEEPs, ${basinEntries.length} basins)`);
+      return { teeps: seededTeeps, basins: seededBasins };
+    } catch (err) {
+      console.error("[TEEP-D1] Cold-start seed FAILED (will retry next request):", err);
+      // Do NOT set d1Seeded = true on failure — allow retry
+      return { teeps: 0, basins: 0 };
+    } finally {
+      d1SeedInProgress = null;
+    }
+  })();
+
+  return d1SeedInProgress;
 }
 
 // ========================================================================

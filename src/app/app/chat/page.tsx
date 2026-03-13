@@ -252,6 +252,14 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
                 <span className={enforcement.agfHitType === "FULL_HIT" ? "text-success" : enforcement.agfHitType === "PARTIAL_HIT" ? "text-accent-light" : "text-muted"}>
                   {enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHE" : enforcement.agfHitType === "PARTIAL_HIT" ? "\u{1F50C} BRIDGE" : "\u{1F9EA} JIT"}
                 </span>
+                {enforcement.tokensSaved && enforcement.tokensSaved.total > 0 && (
+                  <>
+                    <span className="text-muted">|</span>
+                    <span className="text-success font-mono">
+                      {"\u{1F4B0}"} {enforcement.tokensSaved.total.toLocaleString()} tokens saved
+                    </span>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -1237,8 +1245,11 @@ export default function ChatPage() {
                   );
                 }
               } else if (parsed.type === "agf") {
-                // Capture AGF hit type and timing data
+                // Capture AGF hit type, timing data, and token savings
                 enforcement.agfHitType = parsed.hitType;
+                if (parsed.tokensSaved) {
+                  enforcement.tokensSaved = parsed.tokensSaved;
+                }
                 if (parsed.timing) {
                   agfTiming = parsed.timing;
                   enforcement.timing = parsed.timing;

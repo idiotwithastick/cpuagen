@@ -605,13 +605,24 @@ export async function POST(req: Request) {
           const hitType = agfResult.type;
           const cachedContent = agfResult.content;
 
-          // Send AGF hit notification
+          // Estimate tokens saved: input tokens (prompt) + output tokens (response)
+          // ~4 chars per token is standard approximation
+          const inputTokensSaved = Math.ceil(userInput.length / 4);
+          const outputTokensSaved = Math.ceil(cachedContent.length / 4);
+          const totalTokensSaved = inputTokensSaved + outputTokensSaved;
+
+          // Send AGF hit notification with token savings
           controller.enqueue(
             encoder.encode(sseEvent({
               type: "agf",
               hitType,
               teepId: agfResult.teepId,
               distance: "distance" in agfResult ? agfResult.distance : 0,
+              tokensSaved: {
+                input: inputTokensSaved,
+                output: outputTokensSaved,
+                total: totalTokensSaved,
+              },
               timing: {
                 thermosolve_ms: t1 - t0,
                 cbf_ms: t2 - t1,
@@ -722,7 +733,7 @@ export async function POST(req: Request) {
 
             // AGF Protocol Step 5: Commit CONTENT + signature for future O(1) hits
             // Pass inputContent so basin index maps this input → this response
-            const teepId = commitTeep(fullContent, postSig, postCbf.allSafe as boolean, userInput);
+            const teepId = await commitTeep(fullContent, postSig, postCbf.allSafe as boolean, userInput);
 
             const failedPost = Object.entries(postCbf)
               .filter(([k, v]) => k !== "allSafe" && v !== true)
