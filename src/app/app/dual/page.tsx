@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import type { EnforcementResult, Settings, ApiKeys } from "@/lib/types";
+import type { EnforcementResult, Settings, ApiKeys, Provider } from "@/lib/types";
 import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS } from "@/lib/types";
 import { getDualContext } from "@/lib/system-context";
 
@@ -13,6 +13,11 @@ interface DualMessage {
   timestamp: number;
   enforcement?: EnforcementResult;
   panel: "left" | "right";
+}
+
+interface PanelConfig {
+  provider: Provider;
+  model: string;
 }
 
 /* ─── Enforcement mini badge ─── */
@@ -38,7 +43,9 @@ function ChatPanel({
   onSend,
   loading,
   onStop,
-  otherPanelMessages,
+  config,
+  onProviderChange,
+  onModelChange,
   settings,
 }: {
   side: "left" | "right";
@@ -46,23 +53,18 @@ function ChatPanel({
   onSend: (text: string) => void;
   loading: boolean;
   onStop: () => void;
-  otherPanelMessages: DualMessage[];
+  config: PanelConfig;
+  onProviderChange: (provider: Provider) => void;
+  onModelChange: (model: string) => void;
   settings: Settings;
 }) {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Get which provider/model this panel uses
-  const providers = PROVIDERS.filter((p) => !p.noKeyRequired || p.id === "demo");
-  const panelProvider = side === "left" ? settings.activeProvider : (
-    // Right panel tries next provider, falls back to same
-    providers.find((p) => p.id !== settings.activeProvider)?.id || settings.activeProvider
-  );
-  const panelModel = side === "left" ? settings.activeModel : (
-    PROVIDERS.find((p) => p.id === panelProvider)?.defaultModel || settings.activeModel
-  );
-  const providerName = PROVIDERS.find((p) => p.id === panelProvider)?.name || panelProvider;
+  const providerConfig = PROVIDERS.find((p) => p.id === config.provider);
+  const providerName = providerConfig?.name || config.provider;
+  const availableModels = providerConfig?.models || [];
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -82,16 +84,39 @@ function ChatPanel({
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0">
-      {/* Panel header */}
-      <div className={`h-9 flex items-center justify-between px-3 border-b shrink-0 ${
+      {/* Panel header with selectors */}
+      <div className={`flex flex-col border-b shrink-0 ${
         side === "left" ? "border-border bg-surface/50" : "border-border bg-surface/30"
       }`}>
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${loading ? "bg-accent-light animate-pulse" : "bg-success"}`} />
-          <span className="text-[10px] font-mono text-muted uppercase">{side}</span>
-          <span className="text-[10px] font-mono text-accent-light">{providerName}</span>
+        {/* Top row: status + side label */}
+        <div className="h-9 flex items-center justify-between px-3">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${loading ? "bg-accent-light animate-pulse" : "bg-success"}`} />
+            <span className="text-[10px] font-mono text-muted uppercase">{side}</span>
+          </div>
+          <span className="text-[9px] font-mono text-muted">{config.model}</span>
         </div>
-        <span className="text-[9px] font-mono text-muted">{panelModel}</span>
+        {/* Selector row */}
+        <div className="flex items-center gap-2 px-3 pb-2">
+          <select
+            value={config.provider}
+            onChange={(e) => onProviderChange(e.target.value as Provider)}
+            className="bg-surface border border-border rounded px-1.5 py-1 text-[10px] font-mono text-foreground outline-none cursor-pointer hover:border-accent/40 flex-1 min-w-0"
+          >
+            {PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <select
+            value={config.model}
+            onChange={(e) => onModelChange(e.target.value)}
+            className="bg-surface border border-border rounded px-1.5 py-1 text-[10px] font-mono text-foreground outline-none cursor-pointer hover:border-accent/40 flex-1 min-w-0"
+          >
+            {availableModels.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Messages */}
@@ -101,7 +126,7 @@ function ChatPanel({
             <div>
               <div className="text-2xl mb-2">{side === "left" ? "\u{1F4AC}" : "\u{1F5E8}\uFE0F"}</div>
               <div>Send a message to start</div>
-              <div className="text-[10px] mt-1">Both panels share context automatically</div>
+              <div className="text-[10px] mt-1">Select your model above, then chat</div>
             </div>
           </div>
         )}
@@ -165,20 +190,51 @@ export default function DualPage() {
   const [loadingRight, setLoadingRight] = useState(false);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [syncMode, setSyncMode] = useState<"shared" | "independent">("shared");
+
+  // Per-panel provider/model selection
+  const [leftConfig, setLeftConfig] = useState<PanelConfig>({ provider: "demo", model: "gemini-2.0-flash" });
+  const [rightConfig, setRightConfig] = useState<PanelConfig>({ provider: "demo", model: "gpt-4o-mini" });
+
   const abortLeftRef = useRef<AbortController | null>(null);
   const abortRightRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     try {
       const raw = JSON.parse(localStorage.getItem("cpuagen-settings") || "{}");
-      setSettings(migrateSettings(raw));
+      const s = migrateSettings(raw);
+      setSettings(s);
+      // Initialize panels: left = active provider, right = next available or demo alternate
+      const leftProv = s.activeProvider;
+      const leftMod = s.activeModel || PROVIDERS.find((p) => p.id === leftProv)?.defaultModel || "gemini-2.0-flash";
+      setLeftConfig({ provider: leftProv, model: leftMod });
+
+      // Right panel: pick a different provider if possible, otherwise different model on demo
+      const otherProvider = PROVIDERS.find((p) => p.id !== leftProv);
+      if (otherProvider) {
+        setRightConfig({ provider: otherProvider.id, model: otherProvider.defaultModel });
+      } else {
+        // Same provider, pick alternate model
+        const prov = PROVIDERS.find((p) => p.id === leftProv);
+        const altModel = prov?.models.find((m) => m.id !== leftMod)?.id || leftMod;
+        setRightConfig({ provider: leftProv, model: altModel });
+      }
     } catch { /* defaults */ }
+  }, []);
+
+  const handleProviderChange = useCallback((side: "left" | "right", provider: Provider) => {
+    const provConfig = PROVIDERS.find((p) => p.id === provider);
+    const newConfig: PanelConfig = { provider, model: provConfig?.defaultModel || "" };
+    if (side === "left") setLeftConfig(newConfig);
+    else setRightConfig(newConfig);
+  }, []);
+
+  const handleModelChange = useCallback((side: "left" | "right", model: string) => {
+    if (side === "left") setLeftConfig((prev) => ({ ...prev, model }));
+    else setRightConfig((prev) => ({ ...prev, model }));
   }, []);
 
   /* ─── Build context for a panel ─── */
   const buildContext = useCallback((panel: "left" | "right", newText: string) => {
-    // In shared mode, both panels see all messages
-    // In independent mode, each panel only sees its own + other's assistant messages
     const contextMessages = syncMode === "shared"
       ? messages
       : messages.filter((m) => m.panel === panel || m.role === "assistant");
@@ -199,17 +255,12 @@ export default function DualPage() {
   ) => {
     const setLoading = panel === "left" ? setLoadingLeft : setLoadingRight;
     const abortRef = panel === "left" ? abortLeftRef : abortRightRef;
+    const config = panel === "left" ? leftConfig : rightConfig;
 
     setLoading(true);
 
-    // Determine provider/model for this panel
-    const providers = PROVIDERS.filter((p) => !p.noKeyRequired || p.id === "demo");
-    const provider = panel === "left" ? settings.activeProvider : (
-      providers.find((p) => p.id !== settings.activeProvider)?.id || settings.activeProvider
-    );
-    const model = panel === "left" ? settings.activeModel : (
-      PROVIDERS.find((p) => p.id === provider)?.defaultModel || settings.activeModel
-    );
+    const provider = config.provider;
+    const model = config.model;
     const apiKey = provider !== "demo" ? settings.apiKeys[provider as keyof ApiKeys] || "" : "";
 
     // Add user message
@@ -328,7 +379,7 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
       setLoading(false);
       abortRef.current = null;
     }
-  }, [settings, buildContext]);
+  }, [settings, buildContext, leftConfig, rightConfig]);
 
   const handleSendLeft = useCallback((text: string) => streamResponse("left", text), [streamResponse]);
   const handleSendRight = useCallback((text: string) => streamResponse("right", text), [streamResponse]);
@@ -373,7 +424,9 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
           onSend={handleSendLeft}
           loading={loadingLeft}
           onStop={() => abortLeftRef.current?.abort()}
-          otherPanelMessages={otherMessages("left")}
+          config={leftConfig}
+          onProviderChange={(p) => handleProviderChange("left", p)}
+          onModelChange={(m) => handleModelChange("left", m)}
           settings={settings}
         />
 
@@ -387,7 +440,9 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
           onSend={handleSendRight}
           loading={loadingRight}
           onStop={() => abortRightRef.current?.abort()}
-          otherPanelMessages={otherMessages("right")}
+          config={rightConfig}
+          onProviderChange={(p) => handleProviderChange("right", p)}
+          onModelChange={(m) => handleModelChange("right", m)}
           settings={settings}
         />
       </div>
