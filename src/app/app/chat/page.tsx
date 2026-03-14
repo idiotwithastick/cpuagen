@@ -252,11 +252,22 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
                 <span className={enforcement.agfHitType === "FULL_HIT" || enforcement.agfHitType === "BASIN_HIT" ? "text-success" : enforcement.agfHitType === "PARTIAL_HIT" ? "text-accent-light" : "text-muted"}>
                   {enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHE" : enforcement.agfHitType === "BASIN_HIT" ? "\u26A1 BASIN" : enforcement.agfHitType === "PARTIAL_HIT" ? "\u{1F50C} BRIDGE" : "\u{1F9EA} JIT"}
                 </span>
+                {enforcement.basinRendered && (
+                  <>
+                    <span className="text-muted">|</span>
+                    <span className="text-success font-mono">
+                      {"\u{1F3AF}"} State Rendered
+                    </span>
+                  </>
+                )}
                 {enforcement.tokensSaved && enforcement.tokensSaved.total > 0 && (
                   <>
                     <span className="text-muted">|</span>
                     <span className="text-success font-mono">
                       {"\u{1F4B0}"} {enforcement.tokensSaved.total.toLocaleString()} tokens saved
+                      {" "}({Math.round((enforcement.tokensSaved.output / enforcement.tokensSaved.total) * 100)}% output |
+                      {" "}S={enforcement.pre.signature.S} | dS={enforcement.pre.signature.dS} | \u03C6={enforcement.pre.signature.phi} |
+                      {" "}I<sub>t</sub>={enforcement.pre.signature.I_truth ?? "—"} | \u03C8={enforcement.pre.signature.psi_coherence ?? "—"} | \u03B2T={enforcement.pre.signature.beta_T ?? "—"})
                     </span>
                   </>
                 )}
@@ -631,6 +642,24 @@ function saveConversations(convs: Conversation[]) {
       // truly full
     }
   }
+  // Cloud sync — fire and forget
+  for (const conv of convs) {
+    if (conv.messages.length > 0) {
+      const stripped = conv.messages.map((m) => ({
+        id: m.id, role: m.role, content: m.content, timestamp: m.timestamp,
+      }));
+      fetch("/api/memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save_conversation",
+          id: conv.id,
+          title: conv.title,
+          messages: stripped,
+        }),
+      }).catch(() => {});
+    }
+  }
 }
 
 function generateTitle(msgs: Message[]): string {
@@ -654,7 +683,7 @@ const EXAMPLE_PROMPTS = [
   { label: "Physics-based AI", prompt: "What does 'physics-based AI enforcement' mean? How is CPUAGEN using physics to validate AI responses?" },
   { label: "Validation pipeline", prompt: "Walk me through the full CPUAGEN validation pipeline from the moment I type a message to when I see the response." },
   { label: "Why enforcement matters", prompt: "Why does AI enforcement matter? What problems does CPUAGEN solve that other AI platforms don't?" },
-  { label: "Knowledge caching", prompt: "How does CPUAGEN's knowledge cache work? What does it mean that validated answers are cached permanently?" },
+  { label: "Knowledge caching", prompt: "How does CPUAGEN's TEEP system work? What does it mean that basin states compound over time?" },
   { label: "Pre vs post validation", prompt: "What's the difference between pre-validation and post-validation in CPUAGEN? Why validate both input AND output?" },
   { label: "Barrier failures", prompt: "What happens when one of CPUAGEN's safety barriers fails? Does the response get blocked entirely?" },
   { label: "Who built CPUAGEN?", prompt: "Who created CPUAGEN and what's the vision behind it? What problem was it originally designed to solve?" },
@@ -663,6 +692,7 @@ const EXAMPLE_PROMPTS = [
   { label: "Bring your own key", prompt: "How does the 'bring your own API key' model work in CPUAGEN? Does CPUAGEN ever see my conversations?" },
   { label: "Future roadmap", prompt: "What's coming next for CPUAGEN? What features are planned for the future of the platform?" },
   { label: "GreyBeam Markup", prompt: "What is GreyBeam in CPUAGEN? How does the PDF markup and annotation system work? Can the AI draw annotations on my PDFs?" },
+  { label: "Dual mode", prompt: "What is Dual mode in CPUAGEN? How does side-by-side model comparison work and why is it useful?" },
 ];
 
 /* ─── Main chat page ─── */
@@ -1080,7 +1110,7 @@ export default function ChatPage() {
         "# COMPREHENSIVE CPUAGEN KNOWLEDGE BASE",
         "",
         "## What is CPUAGEN?",
-        "CPUAGEN is an AI enforcement platform that sits between the user and any LLM provider (Claude, GPT-4o, Gemini, Grok, Llama, and others). Unlike ChatGPT, Perplexity, or other AI chatbots that give you raw, unvalidated LLM output, CPUAGEN validates every single message through a physics-based enforcement engine before it reaches you. Think of it as a quality assurance layer for AI — except instead of human reviewers, it uses mathematical physics to guarantee response quality. The key difference: ChatGPT trusts the model's output. CPUAGEN verifies it.",
+        "CPUAGEN (CPU Agentic Engine) is an AI enforcement platform that sits between the user and any LLM provider (Claude, GPT-4o, Gemini, Grok, Llama, and others). Unlike ChatGPT, Perplexity, or other AI chatbots that give you raw, unvalidated LLM output, CPUAGEN validates every single message through a physics-based enforcement engine before it reaches you. Think of it as a quality assurance layer for AI — except instead of human reviewers, it uses mathematical physics to guarantee response quality. The key difference: ChatGPT trusts the model's output. CPUAGEN verifies it.",
         "",
         "## SSD-RCI Framework",
         "SSD-RCI (Semantic State Derived Recursive Cognitive Integration) is the theoretical physics framework underpinning CPUAGEN. It treats AI responses not as text strings but as states in a mathematical space. Each response has measurable physical properties — entropy, coherence, energy, curvature — that can be computed, validated, and compared against known-good basins of knowledge. SSD-RCI was developed by Wesley Foreman as a novel approach to AGI (Artificial General Intelligence) that uses thermodynamic physics rather than statistical learning to ensure AI reliability.",
@@ -1140,7 +1170,11 @@ export default function ChatPage() {
         "CPUAGEN is built on the Anti-Goodhart First (AGF) principle: 'When a measure becomes a target, it ceases to be a good measure.' Traditional AI systems optimize for metrics (helpfulness scores, human preference ratings) that can be gamed. CPUAGEN's enforcement engine is designed to be immune to Goodhart's Law — the barriers measure fundamental physical properties that cannot be faked or gamed. A response either satisfies the physics or it doesn't.",
         "",
         "## The Knowledge Compounding Effect",
-        "Unlike traditional AI chatbots where every question is answered from scratch, CPUAGEN's TEEP cache means knowledge compounds over time. The first time a question is answered and validated, it's cached permanently. Every subsequent identical or similar query returns the cached, pre-validated answer instantly. This creates a growing knowledge base of verified answers that gets faster and more comprehensive with every interaction. The system currently has over 7 million cached TEEPs.",
+        "Unlike traditional AI chatbots where every question is answered from scratch, CPUAGEN's TEEP system means knowledge compounds over time. The first time a question is answered and validated, its thermodynamic basin state is stored as a TEEP — not the text itself, but the solved semantic coordinates (entropy, coherence, phi, synergy). On subsequent similar queries, the pre-solved state is injected into the LLM as rendering context, skipping the expensive ODE and CBF re-computation while still producing a fresh, contextual response. The system currently has over 7 million solved basin states.",
+        "",
+        "# Dual Mode",
+        "",
+        "**Dual Mode** — A side-by-side comparison view that lets you send the same prompt to two different LLM providers simultaneously. Each panel has its own provider and model selector, so you can compare Claude vs GPT, Gemini vs Grok, or any combination. Both responses pass through the full CPUAGEN enforcement pipeline independently — you see separate thermosolve signatures, CBF results, and timing for each. This is useful for: (1) comparing how different models answer the same question, (2) verifying consistency across providers, (3) finding the best model for your specific use case, and (4) building confidence in answers by seeing agreement between independent models. Dual mode is the user-facing version of CPUAGEN's multi-model consensus capability.",
         "",
         "# Canvas, Preview & GreyBeam Markup Features",
         "",
@@ -1260,6 +1294,9 @@ export default function ChatPage() {
                 enforcement.agfHitType = parsed.hitType;
                 if (parsed.tokensSaved) {
                   enforcement.tokensSaved = parsed.tokensSaved;
+                }
+                if (parsed.basinRendered) {
+                  enforcement.basinRendered = true;
                 }
                 if (parsed.timing) {
                   agfTiming = parsed.timing;
@@ -1419,6 +1456,43 @@ export default function ChatPage() {
           >
             + New Chat
           </button>
+          {messages.length > 0 && (
+            <div className="relative group">
+              <button className="px-2.5 py-1 rounded-md text-[10px] font-mono text-muted border border-border hover:border-accent/30 hover:text-accent-light transition-colors cursor-pointer">
+                Export
+              </button>
+              <div className="absolute right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-xl py-1 hidden group-hover:block z-30">
+                {(["pdf", "docx", "xlsx"] as const).map((fmt) => (
+                  <button
+                    key={fmt}
+                    onClick={async () => {
+                      const title = activeConvId ? conversations.find((c) => c.id === activeConvId)?.title || "Chat" : "Chat";
+                      const res = await fetch("/api/export", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          format: fmt,
+                          title,
+                          messages: messages.map((m) => ({ role: m.role, content: m.content, timestamp: m.timestamp })),
+                        }),
+                      });
+                      if (!res.ok) return;
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `${title.replace(/[^a-zA-Z0-9-_ ]/g, "").slice(0, 50)}.${fmt}`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="block w-full px-4 py-1.5 text-left text-xs text-muted hover:text-foreground hover:bg-surface-light transition-colors"
+                  >
+                    {fmt.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <span className="px-2 py-0.5 rounded bg-success/10 text-success border border-success/20 text-[10px] font-mono hidden sm:inline">
             BARRIERS ACTIVE
           </span>
@@ -1484,7 +1558,7 @@ export default function ChatPage() {
               </div>
               <p className="text-muted text-xs max-w-sm mx-auto mb-1 leading-relaxed">
                 Every message is validated by a full series of safety barriers before and after reaching your LLM.
-                Validated answers are cached for instant future retrieval.
+                Validated basin states enable accelerated future responses.
               </p>
               <div className="text-muted/60 text-[10px] font-mono mb-6">
                 Ask &ldquo;How does CPUAGEN work?&rdquo; to learn more

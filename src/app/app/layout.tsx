@@ -12,8 +12,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { href: "/app/chat", label: "Chat", icon: "\u{1F4AC}", active: pathname?.startsWith("/app/chat") },
     { href: "/app/code", label: "Code", icon: "\u{1F4BB}", active: pathname?.startsWith("/app/code") },
     { href: "/app/dual", label: "Dual", icon: "\u{1F91D}", active: pathname?.startsWith("/app/dual") },
+    { href: "/app/cowork", label: "Cowork", icon: "\u{1F9D1}\u200D\u{1F4BB}", active: pathname?.startsWith("/app/cowork") },
+    { href: "/app/automate", label: "Automate", icon: "\u{1F916}", active: pathname?.startsWith("/app/automate") },
+    { href: "/app/memory", label: "Memory", icon: "\u{1F9E0}", active: pathname?.startsWith("/app/memory") },
+    { href: "/app/extensions", label: "Extensions", icon: "\u{1F9E9}", active: pathname?.startsWith("/app/extensions") },
     { href: "/app/dev", label: "Dev Lab", icon: "\u{1F9EA}", active: pathname?.startsWith("/app/dev") },
     { href: "/app/settings", label: "Settings", icon: "\u2699\uFE0F", active: pathname?.startsWith("/app/settings") },
+    { href: "/app/feedback", label: "Feedback", icon: "\u{1F4E8}", active: pathname?.startsWith("/app/feedback") },
   ];
 
   return (
