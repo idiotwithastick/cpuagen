@@ -1,0 +1,55 @@
+name: Warhammer Price Scrape
+
+on:
+  schedule:
+    - cron: '0 4,16 * * *'  # Every 12 hours at 4 AM and 4 PM UTC
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  scrape-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: scraper
+        run: pip install -r requirements.txt
+
+      - name: Run price scrapers
+        working-directory: scraper
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+        run: python main.py --prices
+
+  scrape-points:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: scraper
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Run points scraper
+        working-directory: scraper
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: python main.py --points
