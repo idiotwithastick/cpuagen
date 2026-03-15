@@ -1283,6 +1283,22 @@ export default function DashboardPage() {
                   </div>
                 )}
 
+                {/* Similar TEEPs */}
+                {labResult.nearestTeeps && labResult.nearestTeeps.length > 0 && (
+                  <div className="bg-surface border border-border rounded-lg p-4">
+                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Similar TEEPs (Nearest Neighbors)</h3>
+                    <div className="space-y-1.5">
+                      {labResult.nearestTeeps.map((t: { id: string; content: string; distance: number }, i: number) => (
+                        <div key={i} className="flex items-center gap-2 text-xs font-mono">
+                          <span className="text-accent-light">{t.id}</span>
+                          <span className="text-muted truncate flex-1">{t.content}</span>
+                          <span className="text-warning shrink-0">d={t.distance}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Persistence Status */}
                 <div className="flex items-center gap-2 text-xs font-mono mt-2">
                   <span className="text-muted">Persistence ready:</span>

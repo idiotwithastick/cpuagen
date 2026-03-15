@@ -13,6 +13,7 @@ import {
   getQuantumFisherCoherence,
   getEnforcementMetrics,
   getRecentTeeps,
+  findNearestTeeps,
   thermosolve,
   cbfCheck,
   semanticCannon,
@@ -85,10 +86,13 @@ export async function POST(req: Request) {
     const teepId = `TEEP-${sig.n.toString(16).padStart(8, "0")}`;
     const chain = traceTeepChain(teepId, "both", 5);
 
-    // Step 9: Record trajectory point for manifold coverage
+    // Step 9: Find nearest TEEPs (semantic similarity)
+    const nearestTeeps = findNearestTeeps(sig, 5, 3.0);
+
+    // Step 10: Record trajectory point for manifold coverage
     recordTrajectoryPoint(teepId, sig);
 
-    // Step 10: Persistence readiness
+    // Step 11: Persistence readiness
     const persistReady = shouldPersist();
 
     return Response.json({
@@ -127,6 +131,11 @@ export async function POST(req: Request) {
       decoded,
       machDiamonds,
       chain,
+      nearestTeeps: nearestTeeps.map((t) => ({
+        id: t.id,
+        content: t.content.slice(0, 100),
+        distance: t.distance,
+      })),
       persistReady,
     });
   } catch (error: unknown) {
