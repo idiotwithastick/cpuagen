@@ -52,13 +52,19 @@ export async function POST(req: Request) {
     // Commit a TEEP for the signup event
     commitTeep(`early_access_signup:${normalizedEmail}`, sig, cbf.allSafe, "early_access");
 
-    return Response.json({
+    // Set auth cookie so middleware lets the user through to /app/*
+    const res = Response.json({
       ok: result.ok,
       alreadyExists: result.alreadyExists,
       message: result.alreadyExists
         ? "You're already on the list!"
-        : "You're in! Check your email for an access code.",
+        : "Welcome! Launching console...",
     });
+    res.headers.append(
+      "Set-Cookie",
+      `cpuagen-auth=authenticated; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${60 * 60 * 24 * 30}`
+    );
+    return res;
   }
 
   // ── VALIDATE PASSCODE ──
@@ -71,10 +77,16 @@ export async function POST(req: Request) {
 
     if (result.valid) {
       commitTeep(`passcode_validated:${normalizedEmail}`, sig, cbf.allSafe, "early_access");
-      return Response.json({
+      // Set auth cookie on successful passcode validation too
+      const res = Response.json({
         valid: true,
         message: "Access granted! Redirecting...",
       });
+      res.headers.append(
+        "Set-Cookie",
+        `cpuagen-auth=authenticated; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${60 * 60 * 24 * 30}`
+      );
+      return res;
     }
 
     return Response.json({

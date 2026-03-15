@@ -19,8 +19,10 @@ interface AutomationStep {
   action: string;
   target: string;
   value?: string;
-  status: "pending" | "running" | "done" | "error";
+  status: "pending" | "running" | "done" | "error" | "skipped";
   result?: string;
+  retries?: number;
+  error?: string;
 }
 
 interface Recording {
@@ -36,10 +38,16 @@ interface Recording {
 
 interface ExecutionLog {
   stepIndex: number;
-  status: "running" | "done" | "error";
+  status: "running" | "done" | "error" | "skipped" | "retrying";
   result: string;
   elapsed_ms: number;
 }
+
+const VALID_ACTIONS = [
+  "NAVIGATE", "CLICK", "TYPE", "WAIT", "EXTRACT", "SCREENSHOT",
+  "FETCH", "ASSERT", "CODE", "SEARCH", "SCROLL", "SELECT",
+  "SUBMIT", "UPLOAD", "DOWNLOAD", "STORE", "LOOP", "CONDITION",
+];
 
 const TEMPLATES = [
   { label: "Scrape prices", prompt: "Navigate to the page, find all product prices, and extract them into a table with product name and price", icon: "\uD83D\uDCB0" },
@@ -51,6 +59,196 @@ const TEMPLATES = [
 ];
 
 const STORAGE_KEY = "cpuagen-automations";
+const MAX_RETRIES = 3;
+
+/** Robust step parser — handles multiple formats from AI output */
+function parseStepsFromOutput(text: string): AutomationStep[] {
+  const steps: AutomationStep[] = [];
+  const lines = text.split("\n");
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Format 1: [ACTION] target — detail
+    let match = trimmed.match(/^\[(\w+)]\s*(.+?)(?:\s*[—\-–]\s*(.+))?$/);
+    if (match) {
+      const action = match[1].toUpperCase();
+      if (VALID_ACTIONS.includes(action) || action.length >= 2) {
+        steps.push({
+          id: `step-${steps.length}`,
+          action,
+          target: match[2].trim(),
+          value: match[3]?.trim(),
+          status: "pending",
+        });
+        continue;
+      }
+    }
+
+    // Format 2: N. ACTION: target (detail)
+    match = trimmed.match(/^\d+\.\s*(\w+):\s*(.+?)(?:\s*\((.+)\))?$/);
+    if (match) {
+      const action = match[1].toUpperCase();
+      steps.push({
+        id: `step-${steps.length}`,
+        action,
+        target: match[2].trim(),
+        value: match[3]?.trim(),
+        status: "pending",
+      });
+      continue;
+    }
+
+    // Format 3: - **ACTION** target — detail
+    match = trimmed.match(/^[-*]\s*\*{0,2}(\w+)\*{0,2}\s*(.+?)(?:\s*[—\-–]\s*(.+))?$/);
+    if (match) {
+      const action = match[1].toUpperCase();
+      if (VALID_ACTIONS.includes(action)) {
+        steps.push({
+          id: `step-${steps.length}`,
+          action,
+          target: match[2].trim(),
+          value: match[3]?.trim(),
+          status: "pending",
+        });
+      }
+    }
+  }
+
+  return steps;
+}
+
+/** Step Editor component — inline editing for individual steps */
+function StepEditor({
+  step,
+  index,
+  onUpdate,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
+  onRetry,
+  executing,
+}: {
+  step: AutomationStep;
+  index: number;
+  onUpdate: (updated: AutomationStep) => void;
+  onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
+  onRetry: () => void;
+  executing: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editAction, setEditAction] = useState(step.action);
+  const [editTarget, setEditTarget] = useState(step.target);
+  const [editValue, setEditValue] = useState(step.value || "");
+
+  const save = () => {
+    onUpdate({ ...step, action: editAction, target: editTarget, value: editValue || undefined });
+    setEditing(false);
+  };
+
+  const cancel = () => {
+    setEditAction(step.action);
+    setEditTarget(step.target);
+    setEditValue(step.value || "");
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-start gap-2 p-2 rounded-lg bg-accent/5 border border-accent/20">
+        <span className="text-muted w-6 text-[10px] mt-2">{index + 1}.</span>
+        <div className="flex-1 space-y-1.5">
+          <div className="flex gap-2">
+            <select
+              value={editAction}
+              onChange={(e) => setEditAction(e.target.value)}
+              className="px-2 py-1 bg-surface border border-border rounded text-[10px] font-mono text-foreground"
+            >
+              {VALID_ACTIONS.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+            <input
+              value={editTarget}
+              onChange={(e) => setEditTarget(e.target.value)}
+              placeholder="Target (URL, selector, etc.)"
+              className="flex-1 px-2 py-1 bg-surface border border-border rounded text-xs font-mono text-foreground placeholder:text-muted"
+            />
+          </div>
+          <input
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            placeholder="Value / detail (optional)"
+            className="w-full px-2 py-1 bg-surface border border-border rounded text-xs font-mono text-foreground placeholder:text-muted"
+          />
+          <div className="flex gap-1.5">
+            <button onClick={save} className="px-2 py-0.5 text-[10px] rounded bg-success/20 text-success hover:bg-success/30 transition-colors">Save</button>
+            <button onClick={cancel} className="px-2 py-0.5 text-[10px] rounded bg-surface text-muted hover:text-foreground transition-colors">Cancel</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`group flex items-center gap-2 p-2 rounded-lg transition-colors ${
+      step.status === "running" ? "bg-warning/5 border border-warning/20" :
+      step.status === "done" ? "bg-success/5" :
+      step.status === "error" ? "bg-danger/5 border border-danger/20" :
+      step.status === "skipped" ? "bg-surface/50 opacity-60" :
+      "hover:bg-surface/50"
+    }`}>
+      <span className="w-5 text-center text-sm">{stepStatusIcon(step.status)}</span>
+      <span className="text-muted w-6 text-[10px]">{index + 1}.</span>
+      <span className="px-1.5 py-0.5 rounded bg-accent/10 text-accent-light font-mono text-[10px] shrink-0">
+        {step.action}
+      </span>
+      <span className="text-foreground font-mono text-xs flex-1 truncate">{step.target}</span>
+      {step.value && <span className="text-muted text-xs truncate max-w-[200px]">{step.value}</span>}
+      {step.retries && step.retries > 0 && (
+        <span className="text-[9px] text-warning font-mono">retry {step.retries}</span>
+      )}
+      {step.result && (
+        <span className="text-[9px] text-muted/60 truncate max-w-[150px]" title={step.result}>
+          {step.result}
+        </span>
+      )}
+      {/* Action buttons — visible on hover or when errored */}
+      <div className={`flex gap-0.5 shrink-0 ${step.status === "error" ? "visible" : "invisible group-hover:visible"}`}>
+        {step.status === "error" && !executing && (
+          <button onClick={onRetry} className="px-1.5 py-0.5 text-[9px] rounded bg-warning/20 text-warning hover:bg-warning/30 transition-colors" title="Retry this step">
+            ↻
+          </button>
+        )}
+        {!executing && (
+          <>
+            <button onClick={() => setEditing(true)} className="px-1 py-0.5 text-[9px] rounded text-muted hover:text-foreground hover:bg-surface-light transition-colors" title="Edit">✎</button>
+            {!isFirst && <button onClick={onMoveUp} className="px-1 py-0.5 text-[9px] rounded text-muted hover:text-foreground hover:bg-surface-light transition-colors" title="Move up">↑</button>}
+            {!isLast && <button onClick={onMoveDown} className="px-1 py-0.5 text-[9px] rounded text-muted hover:text-foreground hover:bg-surface-light transition-colors" title="Move down">↓</button>}
+            <button onClick={onDelete} className="px-1 py-0.5 text-[9px] rounded text-danger/60 hover:text-danger hover:bg-danger/5 transition-colors" title="Delete">×</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function stepStatusIcon(status: string) {
+  switch (status) {
+    case "done": return "✅";
+    case "error": return "❌";
+    case "running": return "⏳";
+    case "skipped": return "⏭";
+    default: return "○";
+  }
+}
 
 export default function AutomatePage() {
   const [url, setUrl] = useState("https://");
@@ -65,6 +263,8 @@ export default function AutomatePage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [enforcement, setEnforcement] = useState<EnforcementBadge | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [addingStep, setAddingStep] = useState(false);
+  const [errorRecovery, setErrorRecovery] = useState<"stop" | "skip" | "retry">("retry");
   const abortRef = useRef<AbortController | null>(null);
 
   // Load settings + saved recordings from localStorage
@@ -148,18 +348,8 @@ export default function AutomatePage() {
         }
       }
 
-      // Parse steps from result
-      const stepMatches = result.matchAll(/\[(\w+)]\s*([^\n\u2014]+)(?:\s*\u2014\s*(.+))?/g);
-      const parsed: AutomationStep[] = [];
-      for (const match of stepMatches) {
-        parsed.push({
-          id: `step-${parsed.length}`,
-          action: match[1],
-          target: match[2].trim(),
-          value: match[3]?.trim(),
-          status: "pending",
-        });
-      }
+      // Parse steps from result using robust parser
+      const parsed = parseStepsFromOutput(result);
       if (parsed.length > 0) setSteps(parsed);
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
@@ -169,21 +359,46 @@ export default function AutomatePage() {
     setRunning(false);
   }, [prompt, url, settings]);
 
-  // Execute parsed steps via Agent Loop
-  const executeSteps = useCallback(async () => {
-    if (steps.length === 0 || executing) return;
-    setExecuting(true);
+  // Step manipulation helpers
+  const updateStep = useCallback((index: number, updated: AutomationStep) => {
+    setSteps(prev => prev.map((s, i) => i === index ? updated : s));
+  }, []);
+
+  const deleteStep = useCallback((index: number) => {
+    setSteps(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const moveStep = useCallback((from: number, to: number) => {
+    setSteps(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next.map((s, i) => ({ ...s, id: `step-${i}` }));
+    });
+  }, []);
+
+  const addStep = useCallback((action: string, target: string, value?: string) => {
+    setSteps(prev => [
+      ...prev,
+      { id: `step-${prev.length}`, action, target, value, status: "pending" as const },
+    ]);
+    setAddingStep(false);
+  }, []);
+
+  const resetSteps = useCallback(() => {
+    setSteps(prev => prev.map(s => ({ ...s, status: "pending" as const, result: undefined, error: undefined, retries: 0 })));
     setExecutionLogs([]);
-    setTab("execute");
-    abortRef.current = new AbortController();
+    setOutput("");
+  }, []);
 
-    // Build a task description from the steps
-    const stepsDesc = steps.map((s, i) =>
-      `Step ${i + 1}: [${s.action}] ${s.target}${s.value ? ` — ${s.value}` : ""}`
-    ).join("\n");
+  // Execute a single step via agent loop
+  const executeSingleStep = useCallback(async (stepIndex: number, signal: AbortSignal): Promise<{ ok: boolean; result: string; elapsed: number }> => {
+    const step = steps[stepIndex];
+    if (!step) return { ok: false, result: "Step not found", elapsed: 0 };
 
-    const agentQuery = `Execute the following automation plan. For each step, use the appropriate tool (fetch_url for NAVIGATE/FETCH, code_execute for data processing, web_search for lookups). Report the result of each step.\n\nTarget URL: ${url}\n\n${stepsDesc}`;
+    const agentQuery = `Execute this single automation step on URL: ${url}\n\n[${step.action}] ${step.target}${step.value ? ` — ${step.value}` : ""}\n\nUse the appropriate tool: fetch_url for NAVIGATE/FETCH, code_execute for processing/CODE, web_search for SEARCH, calculator for math. Return the result concisely.`;
 
+    const start = Date.now();
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -193,18 +408,18 @@ export default function AutomatePage() {
           provider: settings.activeProvider,
           model: settings.activeModel,
           apiKey: settings.activeProvider !== "demo" ? settings.apiKeys[settings.activeProvider as keyof typeof settings.apiKeys] || "" : "",
-          maxIterations: Math.max(steps.length + 2, 10),
+          maxIterations: 5,
         })),
-        signal: abortRef.current.signal,
+        signal,
       });
 
       const reader = res.body?.getReader();
-      if (!reader) { setExecuting(false); return; }
+      if (!reader) return { ok: false, result: "No response stream", elapsed: Date.now() - start };
 
       const decoder = new TextDecoder();
       let buffer = "";
-      let stepIdx = 0;
-      let fullOutput = "";
+      let resultText = "";
+      let hasError = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -218,47 +433,169 @@ export default function AutomatePage() {
           if (payload === "[DONE]") continue;
           try {
             const parsed = JSON.parse(payload);
-            if (parsed.type === "agent_step") {
-              // Map agent steps to our execution log
-              if (parsed.phase === "EXECUTE" && parsed.toolResults) {
-                for (const tr of parsed.toolResults) {
-                  const log: ExecutionLog = {
-                    stepIndex: Math.min(stepIdx, steps.length - 1),
-                    status: tr.error ? "error" : "done",
-                    result: tr.content || "",
-                    elapsed_ms: parsed.elapsed_ms || 0,
-                  };
-                  setExecutionLogs(prev => [...prev, log]);
-                  setSteps(prev => prev.map((s, i) =>
-                    i === stepIdx ? { ...s, status: tr.error ? "error" : "done", result: tr.content?.slice(0, 200) } : s
-                  ));
-                  stepIdx++;
-                }
-              } else if (parsed.phase === "PLAN" && stepIdx < steps.length) {
-                // Mark current step as running
-                setSteps(prev => prev.map((s, i) =>
-                  i === stepIdx ? { ...s, status: "running" } : s
-                ));
+            if (parsed.type === "delta") {
+              resultText += parsed.content;
+            } else if (parsed.type === "agent_step" && parsed.phase === "EXECUTE" && parsed.toolResults) {
+              for (const tr of parsed.toolResults) {
+                if (tr.error) hasError = true;
+                resultText += (tr.content || "") + "\n";
               }
-            } else if (parsed.type === "delta") {
-              fullOutput += parsed.content;
-              setOutput(fullOutput);
-            } else if (parsed.type === "agent_complete") {
-              // Mark remaining steps done
-              setSteps(prev => prev.map(s =>
-                s.status === "pending" || s.status === "running" ? { ...s, status: "done" } : s
-              ));
             }
           } catch { /* skip */ }
         }
       }
+
+      return { ok: !hasError && resultText.length > 0, result: resultText.trim().slice(0, 500), elapsed: Date.now() - start };
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw e;
+      return { ok: false, result: (e as Error).message, elapsed: Date.now() - start };
+    }
+  }, [steps, url, settings]);
+
+  // Execute all steps with retry + error recovery
+  const executeSteps = useCallback(async (startFrom = 0) => {
+    if (steps.length === 0 || executing) return;
+    setExecuting(true);
+    if (startFrom === 0) {
+      setExecutionLogs([]);
+      setOutput("");
+    }
+    setTab("execute");
+    abortRef.current = new AbortController();
+
+    try {
+      for (let i = startFrom; i < steps.length; i++) {
+        if (abortRef.current.signal.aborted) break;
+
+        const step = steps[i];
+        if (step.status === "done" || step.status === "skipped") continue;
+
+        // Mark running
+        setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: "running" } : s));
+        setExecutionLogs(prev => [...prev, { stepIndex: i, status: "running", result: "Executing...", elapsed_ms: 0 }]);
+
+        let attempt = 0;
+        let lastResult = { ok: false, result: "", elapsed: 0 };
+
+        while (attempt <= MAX_RETRIES) {
+          if (abortRef.current.signal.aborted) break;
+
+          if (attempt > 0) {
+            setExecutionLogs(prev => [...prev, { stepIndex: i, status: "retrying", result: `Retry ${attempt}/${MAX_RETRIES}`, elapsed_ms: 0 }]);
+            setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, retries: attempt } : s));
+          }
+
+          lastResult = await executeSingleStep(i, abortRef.current.signal);
+
+          if (lastResult.ok) break;
+          attempt++;
+
+          if (attempt > MAX_RETRIES) break;
+          if (errorRecovery !== "retry") break;
+        }
+
+        if (lastResult.ok) {
+          setSteps(prev => prev.map((s, idx) =>
+            idx === i ? { ...s, status: "done", result: lastResult.result.slice(0, 200) } : s
+          ));
+          setExecutionLogs(prev => [...prev, { stepIndex: i, status: "done", result: lastResult.result.slice(0, 300), elapsed_ms: lastResult.elapsed }]);
+        } else {
+          // Error — apply recovery strategy
+          if (errorRecovery === "skip") {
+            setSteps(prev => prev.map((s, idx) =>
+              idx === i ? { ...s, status: "skipped", result: lastResult.result.slice(0, 200), error: lastResult.result } : s
+            ));
+            setExecutionLogs(prev => [...prev, { stepIndex: i, status: "skipped", result: `Skipped: ${lastResult.result.slice(0, 200)}`, elapsed_ms: lastResult.elapsed }]);
+            continue; // Skip to next step
+          } else if (errorRecovery === "stop") {
+            setSteps(prev => prev.map((s, idx) =>
+              idx === i ? { ...s, status: "error", result: lastResult.result.slice(0, 200), error: lastResult.result } : s
+            ));
+            setExecutionLogs(prev => [...prev, { stepIndex: i, status: "error", result: `Stopped: ${lastResult.result.slice(0, 200)}`, elapsed_ms: lastResult.elapsed }]);
+            break; // Stop execution
+          } else {
+            // Retry exhausted
+            setSteps(prev => prev.map((s, idx) =>
+              idx === i ? { ...s, status: "error", result: lastResult.result.slice(0, 200), error: lastResult.result, retries: attempt } : s
+            ));
+            setExecutionLogs(prev => [...prev, { stepIndex: i, status: "error", result: `Failed after ${attempt} retries: ${lastResult.result.slice(0, 200)}`, elapsed_ms: lastResult.elapsed }]);
+            break;
+          }
+        }
+
+        setOutput(prev => prev + `\nStep ${i + 1} [${step.action}]: ${lastResult.ok ? "✓" : "✗"} (${lastResult.elapsed}ms)`);
+      }
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
-        setOutput("Execution error: " + (e as Error).message);
+        setOutput(prev => prev + "\nExecution error: " + (e as Error).message);
       }
     }
     setExecuting(false);
-  }, [steps, executing, url, settings]);
+  }, [steps, executing, url, settings, errorRecovery, executeSingleStep]);
+
+  // Retry a single failed step
+  const retryStep = useCallback(async (index: number) => {
+    if (executing) return;
+    setExecuting(true);
+    abortRef.current = new AbortController();
+    setSteps(prev => prev.map((s, i) => i === index ? { ...s, status: "running", retries: (s.retries || 0) + 1 } : s));
+
+    try {
+      const result = await executeSingleStep(index, abortRef.current.signal);
+      setSteps(prev => prev.map((s, i) =>
+        i === index ? { ...s, status: result.ok ? "done" : "error", result: result.result.slice(0, 200) } : s
+      ));
+      setExecutionLogs(prev => [...prev, {
+        stepIndex: index,
+        status: result.ok ? "done" : "error",
+        result: result.result.slice(0, 300),
+        elapsed_ms: result.elapsed,
+      }]);
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") {
+        setSteps(prev => prev.map((s, i) => i === index ? { ...s, status: "error", error: (e as Error).message } : s));
+      }
+    }
+    setExecuting(false);
+  }, [executing, executeSingleStep]);
+
+  // Export/Import
+  const exportPlan = useCallback(() => {
+    const data = { url, prompt, steps: steps.map(s => ({ action: s.action, target: s.target, value: s.value })), exported_at: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `automation-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, [url, prompt, steps]);
+
+  const importPlan = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (data.url) setUrl(data.url);
+        if (data.prompt) setPrompt(data.prompt);
+        if (Array.isArray(data.steps)) {
+          setSteps(data.steps.map((s: { action: string; target: string; value?: string }, i: number) => ({
+            id: `step-${i}`,
+            action: s.action || "FETCH",
+            target: s.target || "",
+            value: s.value,
+            status: "pending" as const,
+          })));
+        }
+        setTab("natural");
+      } catch { /* invalid JSON */ }
+    };
+    input.click();
+  }, []);
 
   const saveRecording = () => {
     if (steps.length === 0) return;
@@ -267,7 +604,7 @@ export default function AutomatePage() {
       name: prompt.slice(0, 50) || "Untitled",
       url,
       prompt,
-      steps: steps.map(s => ({ ...s, status: "pending", result: undefined })),
+      steps: steps.map(s => ({ ...s, status: "pending" as const, result: undefined })),
       created_at: Date.now(),
       runCount: 0,
     };
@@ -281,7 +618,7 @@ export default function AutomatePage() {
   const loadRecording = (rec: Recording) => {
     setUrl(rec.url || "https://");
     setPrompt(rec.prompt || rec.name);
-    setSteps(rec.steps.map(s => ({ ...s, status: "pending", result: undefined })));
+    setSteps(rec.steps.map(s => ({ ...s, status: "pending" as const, result: undefined })));
     setOutput("");
     setExecutionLogs([]);
     setTab("natural");
@@ -290,37 +627,17 @@ export default function AutomatePage() {
   const rerunRecording = (rec: Recording) => {
     setUrl(rec.url || "https://");
     setPrompt(rec.prompt || rec.name);
-    setSteps(rec.steps.map(s => ({ ...s, status: "pending", result: undefined })));
+    setSteps(rec.steps.map(s => ({ ...s, status: "pending" as const, result: undefined })));
     setOutput("");
     setExecutionLogs([]);
-    // Update run count
     persistRecordings(recordings.map(r =>
       r.id === rec.id ? { ...r, lastRun: Date.now(), runCount: (r.runCount || 0) + 1 } : r
     ));
     setTab("execute");
-    // Execute will start after state settles
     setTimeout(() => {
       const btn = document.getElementById("execute-btn");
       if (btn) btn.click();
     }, 100);
-  };
-
-  const stepStatusIcon = (status: string) => {
-    switch (status) {
-      case "done": return "\u2705";
-      case "error": return "\u274C";
-      case "running": return "\u23F3";
-      default: return "\u25CB";
-    }
-  };
-
-  const stepStatusColor = (status: string) => {
-    switch (status) {
-      case "done": return "text-success";
-      case "error": return "text-danger";
-      case "running": return "text-warning";
-      default: return "text-muted";
-    }
   };
 
   const hasValidProvider = ["openai", "anthropic", "google", "xai"].includes(settings.activeProvider);
@@ -344,23 +661,35 @@ export default function AutomatePage() {
               HOW TO ?
             </button>
           </div>
-          {steps.length > 0 && !executing && (
-            <button
-              onClick={executeSteps}
-              disabled={!hasValidProvider}
-              className="px-4 py-2 rounded-lg text-xs font-medium bg-success/20 text-success border border-success/30 hover:bg-success/30 transition-colors disabled:opacity-50"
-            >
-              {"\u25B6"} Execute Plan ({steps.length} steps)
-            </button>
-          )}
-          {executing && (
-            <button
-              onClick={() => abortRef.current?.abort()}
-              className="px-4 py-2 rounded-lg text-xs font-medium bg-danger/20 text-danger border border-danger/30 hover:bg-danger/30 transition-colors"
-            >
-              Stop Execution
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {steps.length > 0 && !executing && (
+              <>
+                <button onClick={exportPlan} className="px-3 py-2 rounded-lg text-[10px] font-medium text-muted border border-border hover:text-foreground hover:bg-surface-light transition-colors" title="Export plan as JSON">
+                  Export
+                </button>
+                <button
+                  onClick={() => executeSteps()}
+                  disabled={!hasValidProvider}
+                  className="px-4 py-2 rounded-lg text-xs font-medium bg-success/20 text-success border border-success/30 hover:bg-success/30 transition-colors disabled:opacity-50"
+                >
+                  ▶ Execute ({steps.length} steps)
+                </button>
+              </>
+            )}
+            {!steps.length && !executing && (
+              <button onClick={importPlan} className="px-3 py-2 rounded-lg text-[10px] font-medium text-muted border border-border hover:text-foreground hover:bg-surface-light transition-colors" title="Import plan from JSON">
+                Import
+              </button>
+            )}
+            {executing && (
+              <button
+                onClick={() => abortRef.current?.abort()}
+                className="px-4 py-2 rounded-lg text-xs font-medium bg-danger/20 text-danger border border-danger/30 hover:bg-danger/30 transition-colors"
+              >
+                Stop Execution
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -482,11 +811,11 @@ export default function AutomatePage() {
                           Save
                         </button>
                         <button
-                          onClick={executeSteps}
+                          onClick={() => executeSteps()}
                           disabled={!hasValidProvider || executing}
                           className="px-3 py-1 text-xs rounded bg-success/10 text-success hover:bg-success/20 transition-colors disabled:opacity-50"
                         >
-                          {"\u25B6"} Execute
+                          ▶ Execute
                         </button>
                       </>
                     )}
@@ -498,25 +827,74 @@ export default function AutomatePage() {
 
             {steps.length > 0 && (
               <div className="bg-surface border border-border rounded-lg p-4">
-                <h3 className="text-sm font-medium mb-3">Parsed Steps ({steps.length})</h3>
-                <div className="space-y-2">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium">Steps ({steps.length})</h3>
+                  <div className="flex items-center gap-2">
+                    {/* Error recovery mode */}
+                    <span className="text-[9px] text-muted">On error:</span>
+                    {(["retry", "skip", "stop"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setErrorRecovery(mode)}
+                        className={`px-2 py-0.5 text-[9px] rounded transition-colors ${
+                          errorRecovery === mode
+                            ? "bg-accent/20 text-accent-light border border-accent/30"
+                            : "text-muted hover:text-foreground border border-transparent"
+                        }`}
+                      >
+                        {mode === "retry" ? "Retry (3x)" : mode === "skip" ? "Skip" : "Stop"}
+                      </button>
+                    ))}
+                    <span className="w-px h-3 bg-border mx-1" />
+                    <button onClick={resetSteps} className="px-2 py-0.5 text-[9px] rounded text-muted hover:text-foreground hover:bg-surface-light transition-colors" title="Reset all steps to pending">
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
                   {steps.map((step, i) => (
-                    <div key={step.id} className={`flex items-center gap-3 text-xs ${stepStatusColor(step.status)}`}>
-                      <span className="w-5 text-center">{stepStatusIcon(step.status)}</span>
-                      <span className="text-muted w-6">{i + 1}.</span>
-                      <span className="px-1.5 py-0.5 rounded bg-accent/10 text-accent-light font-mono text-[10px]">
-                        {step.action}
-                      </span>
-                      <span className="text-foreground font-mono flex-1 truncate">{step.target}</span>
-                      {step.value && <span className="text-muted truncate max-w-[200px]">{step.value}</span>}
-                      {step.result && (
-                        <span className="text-[9px] text-muted/60 truncate max-w-[150px]" title={step.result}>
-                          {step.result}
-                        </span>
-                      )}
-                    </div>
+                    <StepEditor
+                      key={step.id}
+                      step={step}
+                      index={i}
+                      onUpdate={(updated) => updateStep(i, updated)}
+                      onDelete={() => deleteStep(i)}
+                      onMoveUp={() => moveStep(i, i - 1)}
+                      onMoveDown={() => moveStep(i, i + 1)}
+                      isFirst={i === 0}
+                      isLast={i === steps.length - 1}
+                      onRetry={() => retryStep(i)}
+                      executing={executing}
+                    />
                   ))}
                 </div>
+                {/* Add step button */}
+                {!addingStep ? (
+                  <button
+                    onClick={() => setAddingStep(true)}
+                    className="mt-2 w-full py-1.5 rounded-lg border border-dashed border-border text-[10px] text-muted hover:text-foreground hover:border-accent/30 transition-colors"
+                  >
+                    + Add Step
+                  </button>
+                ) : (
+                  <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-accent/5 border border-accent/20">
+                    <select id="new-action" className="px-2 py-1 bg-surface border border-border rounded text-[10px] font-mono text-foreground">
+                      {VALID_ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                    <input id="new-target" placeholder="Target" className="flex-1 px-2 py-1 bg-surface border border-border rounded text-xs font-mono text-foreground placeholder:text-muted" />
+                    <input id="new-value" placeholder="Value (optional)" className="w-40 px-2 py-1 bg-surface border border-border rounded text-xs font-mono text-foreground placeholder:text-muted" />
+                    <button
+                      onClick={() => {
+                        const action = (document.getElementById("new-action") as HTMLSelectElement).value;
+                        const target = (document.getElementById("new-target") as HTMLInputElement).value;
+                        const value = (document.getElementById("new-value") as HTMLInputElement).value;
+                        if (target.trim()) addStep(action, target.trim(), value.trim() || undefined);
+                      }}
+                      className="px-2 py-1 text-[10px] rounded bg-success/20 text-success hover:bg-success/30 transition-colors"
+                    >Add</button>
+                    <button onClick={() => setAddingStep(false)} className="px-2 py-1 text-[10px] rounded text-muted hover:text-foreground transition-colors">Cancel</button>
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -552,32 +930,21 @@ export default function AutomatePage() {
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {steps.map((step, i) => (
-                      <div key={step.id} className={`flex items-start gap-3 p-2 rounded-lg transition-colors ${
-                        step.status === "running" ? "bg-warning/5 border border-warning/20" :
-                        step.status === "done" ? "bg-success/5" :
-                        step.status === "error" ? "bg-danger/5" : ""
-                      }`}>
-                        <span className="w-5 text-center mt-0.5">{stepStatusIcon(step.status)}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-muted">Step {i + 1}</span>
-                            <span className="px-1.5 py-0.5 rounded bg-accent/10 text-accent-light font-mono text-[10px]">
-                              {step.action}
-                            </span>
-                            <span className="text-xs font-mono text-foreground truncate">{step.target}</span>
-                          </div>
-                          {step.value && (
-                            <p className="text-[10px] text-muted mt-0.5">{step.value}</p>
-                          )}
-                          {step.result && (
-                            <pre className="text-[10px] text-muted/70 mt-1 font-mono whitespace-pre-wrap max-h-20 overflow-y-auto">
-                              {step.result}
-                            </pre>
-                          )}
-                        </div>
-                      </div>
+                      <StepEditor
+                        key={step.id}
+                        step={step}
+                        index={i}
+                        onUpdate={(updated) => updateStep(i, updated)}
+                        onDelete={() => deleteStep(i)}
+                        onMoveUp={() => moveStep(i, i - 1)}
+                        onMoveDown={() => moveStep(i, i + 1)}
+                        isFirst={i === 0}
+                        isLast={i === steps.length - 1}
+                        onRetry={() => retryStep(i)}
+                        executing={executing}
+                      />
                     ))}
                   </div>
                 </div>
@@ -613,17 +980,35 @@ export default function AutomatePage() {
                   <div className="flex gap-2">
                     <button
                       id="execute-btn"
-                      onClick={executeSteps}
+                      onClick={() => { resetSteps(); setTimeout(() => executeSteps(), 50); }}
                       disabled={!hasValidProvider}
                       className="px-4 py-2 rounded-lg text-xs font-medium bg-accent/20 text-accent-light border border-accent/30 hover:bg-accent/30 transition-colors disabled:opacity-50"
                     >
-                      Re-run
+                      Re-run All
                     </button>
+                    {steps.some(s => s.status === "error" || s.status === "pending") && (
+                      <button
+                        onClick={() => {
+                          const firstFailed = steps.findIndex(s => s.status === "error" || s.status === "pending");
+                          if (firstFailed >= 0) executeSteps(firstFailed);
+                        }}
+                        disabled={!hasValidProvider}
+                        className="px-4 py-2 rounded-lg text-xs font-medium bg-warning/20 text-warning border border-warning/30 hover:bg-warning/30 transition-colors disabled:opacity-50"
+                      >
+                        Resume from Failed
+                      </button>
+                    )}
                     <button
                       onClick={saveRecording}
                       className="px-4 py-2 rounded-lg text-xs font-medium bg-surface border border-border text-muted hover:text-foreground hover:bg-surface-light transition-colors"
                     >
                       Save to Library
+                    </button>
+                    <button
+                      onClick={exportPlan}
+                      className="px-4 py-2 rounded-lg text-xs font-medium bg-surface border border-border text-muted hover:text-foreground hover:bg-surface-light transition-colors"
+                    >
+                      Export
                     </button>
                   </div>
                 )}
@@ -631,11 +1016,11 @@ export default function AutomatePage() {
                 {!executing && steps.every(s => s.status === "pending") && (
                   <button
                     id="execute-btn"
-                    onClick={executeSteps}
+                    onClick={() => executeSteps()}
                     disabled={!hasValidProvider}
                     className="w-full py-3 rounded-lg text-sm font-medium bg-success/20 text-success border border-success/30 hover:bg-success/30 transition-colors disabled:opacity-50"
                   >
-                    {"\u25B6"} Execute All {steps.length} Steps
+                    ▶ Execute All {steps.length} Steps
                   </button>
                 )}
               </>
