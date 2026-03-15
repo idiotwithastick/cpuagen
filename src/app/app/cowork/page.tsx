@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { getAdminToken } from "@/lib/admin";
 import { getCoworkContext } from "@/lib/system-context";
-import { migrateSettings, DEFAULT_SETTINGS } from "@/lib/types";
+import { migrateSettings, DEFAULT_SETTINGS, PROVIDERS } from "@/lib/types";
 import type { Settings } from "@/lib/types";
 
 interface AgentEnforcement {
@@ -21,6 +21,7 @@ interface Agent {
   status: "idle" | "working" | "done" | "error";
   output: string;
   provider: string;
+  model: string;
   enforcement?: AgentEnforcement;
 }
 
@@ -78,16 +79,16 @@ function guessExtension(lang: string, content: string): string {
 type CoworkMode = "standard" | "ooda";
 
 const STANDARD_AGENTS: Agent[] = [
-  { id: "architect", name: "Architect", role: "System design and architecture decisions", status: "idle", output: "", provider: "claude" },
-  { id: "coder", name: "Coder", role: "Write implementation code", status: "idle", output: "", provider: "gpt" },
-  { id: "reviewer", name: "Reviewer", role: "Code review and quality assurance", status: "idle", output: "", provider: "gemini" },
+  { id: "architect", name: "Architect", role: "System design and architecture decisions", status: "idle", output: "", provider: "default", model: "" },
+  { id: "coder", name: "Coder", role: "Write implementation code", status: "idle", output: "", provider: "default", model: "" },
+  { id: "reviewer", name: "Reviewer", role: "Code review and quality assurance", status: "idle", output: "", provider: "default", model: "" },
 ];
 
 const OODA_AGENTS: Agent[] = [
-  { id: "observer", name: "Observer", role: "OBSERVE: Scan codebase, identify gaps, collect data on current state", status: "idle", output: "", provider: "claude" },
-  { id: "orienter", name: "Orienter", role: "ORIENT: Analyze observations, prioritize by impact, form hypotheses", status: "idle", output: "", provider: "gpt" },
-  { id: "decider", name: "Decider", role: "DECIDE: Select the highest-impact action, define implementation plan", status: "idle", output: "", provider: "gemini" },
-  { id: "actor", name: "Actor", role: "ACT: Execute the plan, write code, verify results", status: "idle", output: "", provider: "claude" },
+  { id: "observer", name: "Observer", role: "OBSERVE: Scan codebase, identify gaps, collect data on current state", status: "idle", output: "", provider: "default", model: "" },
+  { id: "orienter", name: "Orienter", role: "ORIENT: Analyze observations, prioritize by impact, form hypotheses", status: "idle", output: "", provider: "default", model: "" },
+  { id: "decider", name: "Decider", role: "DECIDE: Select the highest-impact action, define implementation plan", status: "idle", output: "", provider: "default", model: "" },
+  { id: "actor", name: "Actor", role: "ACT: Execute the plan, write code, verify results", status: "idle", output: "", provider: "default", model: "" },
 ];
 
 export default function CoworkPage() {
@@ -122,6 +123,15 @@ export default function CoworkPage() {
     setOodaCycle(0);
   };
 
+  /** Resolve provider/model/apiKey for an agent — falls back to global settings */
+  const resolveAgentConfig = (agent: Agent) => {
+    const provider = agent.provider === "default" ? settings.activeProvider : agent.provider;
+    const providerConfig = PROVIDERS.find((p) => p.id === provider);
+    const model = agent.model || (providerConfig?.defaultModel ?? settings.activeModel);
+    const apiKey = providerConfig?.noKeyRequired ? "" : (settings.apiKeys[provider as keyof typeof settings.apiKeys] || "");
+    return { provider, model, apiKey };
+  };
+
   /** Stream a single agent call and return the output */
   const streamAgentCall = async (
     agentId: string,
@@ -133,7 +143,8 @@ export default function CoworkPage() {
     const agent = agents.find((a) => a.id === agentId);
     if (!agent) return "";
     updateAgent(agentId, { status: "working", output: "" });
-    addLog(`${agent.name} working...`);
+    const cfg = resolveAgentConfig(agent);
+    addLog(`${agent.name} working... [${cfg.provider}/${cfg.model}]`);
 
     const res = await fetch("/api/chat", {
       method: "POST",
@@ -143,9 +154,9 @@ export default function CoworkPage() {
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        provider: settings.activeProvider,
-        model: settings.activeModel,
-        apiKey: settings.activeProvider !== "demo" ? settings.apiKeys[settings.activeProvider as keyof typeof settings.apiKeys] || "" : "",
+        provider: cfg.provider,
+        model: cfg.model,
+        apiKey: cfg.apiKey,
         ...(adminToken ? { adminToken } : {}),
       }),
       signal,
@@ -299,7 +310,7 @@ export default function CoworkPage() {
     const id = `agent-${Date.now()}`;
     setAgents((prev) => [
       ...prev,
-      { id, name: `Agent ${prev.length + 1}`, role: "General purpose", status: "idle", output: "", provider: "demo" },
+      { id, name: `Agent ${prev.length + 1}`, role: "General purpose", status: "idle", output: "", provider: "default", model: "" },
     ]);
   };
 
@@ -326,7 +337,8 @@ export default function CoworkPage() {
       // Step 1: Architect decomposes the goal
       const architect = agents.find((a) => a.id === "architect") || agents[0];
       updateAgent(architect.id, { status: "working", output: "" });
-      addLog(`${architect.name} is decomposing the goal...`);
+      const archCfg = resolveAgentConfig(architect);
+      addLog(`${architect.name} is decomposing the goal... [${archCfg.provider}/${archCfg.model}]`);
 
       const archRes = await fetch("/api/chat", {
         method: "POST",
@@ -339,9 +351,9 @@ export default function CoworkPage() {
             },
             { role: "user", content: goal },
           ],
-          provider: settings.activeProvider,
-          model: settings.activeModel,
-          apiKey: settings.activeProvider !== "demo" ? settings.apiKeys[settings.activeProvider as keyof typeof settings.apiKeys] || "" : "",
+          provider: archCfg.provider,
+          model: archCfg.model,
+          apiKey: archCfg.apiKey,
           ...(adminToken ? { adminToken } : {}),
         }),
         signal: abortRef.current.signal,
@@ -412,7 +424,8 @@ export default function CoworkPage() {
       for (const task of parsedTasks) {
         const agent = agents.find((a) => a.name.toLowerCase() === task.assignee) || agents[1] || agents[0];
         updateAgent(agent.id, { status: "working" });
-        addLog(`${agent.name} working on: ${task.description.slice(0, 60)}...`);
+        const taskCfg = resolveAgentConfig(agent);
+        addLog(`${agent.name} working on: ${task.description.slice(0, 60)}... [${taskCfg.provider}/${taskCfg.model}]`);
 
         setTasks((prev) =>
           prev.map((t) => (t.id === task.id ? { ...t, status: "in_progress" } : t))
@@ -426,9 +439,9 @@ export default function CoworkPage() {
               { role: "system", content: getCoworkContext(agent.role) + "\n\nComplete this task concisely." },
               { role: "user", content: task.description },
             ],
-            provider: settings.activeProvider,
-            model: settings.activeModel,
-            apiKey: settings.activeProvider !== "demo" ? settings.apiKeys[settings.activeProvider as keyof typeof settings.apiKeys] || "" : "",
+            provider: taskCfg.provider,
+            model: taskCfg.model,
+            apiKey: taskCfg.apiKey,
             ...(adminToken ? { adminToken } : {}),
           }),
           signal: abortRef.current.signal,
@@ -656,8 +669,39 @@ export default function CoworkPage() {
                   <input
                     value={agent.role}
                     onChange={(e) => updateAgent(agent.id, { role: e.target.value })}
-                    className="bg-transparent text-xs text-muted w-full focus:outline-none"
+                    className="bg-transparent text-xs text-muted w-full focus:outline-none mb-1.5"
                   />
+                  {/* Provider selector */}
+                  <select
+                    value={agent.provider}
+                    onChange={(e) => {
+                      const newProvider = e.target.value;
+                      const prov = PROVIDERS.find((p) => p.id === newProvider);
+                      updateAgent(agent.id, { provider: newProvider, model: prov?.defaultModel || "" });
+                    }}
+                    className="w-full bg-surface-light border border-border rounded px-1.5 py-1 text-[10px] text-foreground focus:outline-none focus:border-accent/50 mb-1"
+                  >
+                    <option value="default">Use Global Settings</option>
+                    {PROVIDERS.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  {/* Model selector — only when not using global */}
+                  {agent.provider !== "default" && (() => {
+                    const prov = PROVIDERS.find((p) => p.id === agent.provider);
+                    if (!prov) return null;
+                    return (
+                      <select
+                        value={agent.model || prov.defaultModel}
+                        onChange={(e) => updateAgent(agent.id, { model: e.target.value })}
+                        className="w-full bg-surface-light border border-border rounded px-1.5 py-1 text-[10px] text-foreground focus:outline-none focus:border-accent/50 mb-1"
+                      >
+                        {prov.models.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    );
+                  })()}
                   {agents.length > 1 && (
                     <button
                       onClick={() => removeAgent(agent.id)}
