@@ -78,6 +78,22 @@ function guessExtension(lang: string, content: string): string {
 
 type CoworkMode = "standard" | "ooda";
 
+const PREMADE_AGENTS: { name: string; role: string; icon: string }[] = [
+  { name: "Research Agent", role: "Deep research, fact-finding, and source analysis. Produces comprehensive research reports with citations.", icon: "\uD83D\uDD0D" },
+  { name: "Archivist", role: "Organize, catalog, and summarize information. Maintains structured knowledge bases and documentation indexes.", icon: "\uD83D\uDCDA" },
+  { name: "Documentation", role: "Full-stack documentation writer. Produces READMEs, API docs, architecture guides, and inline code comments.", icon: "\uD83D\uDCDD" },
+  { name: "Artist", role: "Creative visual design. Generates SVG art, CSS animations, HTML mockups, and UI design concepts.", icon: "\uD83C\uDFA8" },
+  { name: "Tester", role: "Write comprehensive test suites. Unit tests, integration tests, edge cases, and test plans.", icon: "\uD83E\uDDEA" },
+  { name: "DevOps", role: "Infrastructure, CI/CD pipelines, Docker configs, deployment scripts, and cloud architecture.", icon: "\u2699\uFE0F" },
+  { name: "Security Auditor", role: "Security analysis, vulnerability scanning, OWASP checks, and penetration test planning.", icon: "\uD83D\uDD12" },
+  { name: "Data Analyst", role: "Data analysis, visualization, statistical modeling, and insight extraction from datasets.", icon: "\uD83D\uDCCA" },
+  { name: "UX Designer", role: "User experience design, wireframes, user flows, accessibility audits, and usability improvements.", icon: "\uD83D\uDDA5\uFE0F" },
+  { name: "Product Manager", role: "Requirements gathering, user stories, roadmap planning, and feature prioritization.", icon: "\uD83D\uDCCB" },
+  { name: "Debugger", role: "Root cause analysis, bug reproduction, fix implementation, and regression testing.", icon: "\uD83D\uDC1B" },
+  { name: "Optimizer", role: "Performance optimization, profiling analysis, memory/CPU reduction, and algorithmic improvements.", icon: "\u26A1" },
+  { name: "Custom", role: "General purpose agent — edit the role to customize", icon: "\u2795" },
+];
+
 const STANDARD_AGENTS: Agent[] = [
   { id: "architect", name: "Architect", role: "System design and architecture decisions", status: "idle", output: "", provider: "default", model: "" },
   { id: "coder", name: "Coder", role: "Write implementation code", status: "idle", output: "", provider: "default", model: "" },
@@ -102,6 +118,7 @@ export default function CoworkPage() {
   const [maxOodaCycles, setMaxOodaCycles] = useState(5);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewAgent, setPreviewAgent] = useState<string>("");
+  const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const abortRef = useRef<AbortController | null>(null);
@@ -306,12 +323,21 @@ export default function CoworkPage() {
     setRunning(false);
   }, [goal, agents, adminToken, maxOodaCycles, settings]);
 
-  const addAgent = () => {
+  const addAgent = (preset?: typeof PREMADE_AGENTS[number]) => {
     const id = `agent-${Date.now()}`;
     setAgents((prev) => [
       ...prev,
-      { id, name: `Agent ${prev.length + 1}`, role: "General purpose", status: "idle", output: "", provider: "default", model: "" },
+      {
+        id,
+        name: preset ? preset.name : `Agent ${prev.length + 1}`,
+        role: preset ? preset.role : "General purpose",
+        status: "idle",
+        output: "",
+        provider: "default",
+        model: "",
+      },
     ]);
+    setShowAgentPicker(false);
   };
 
   const removeAgent = (id: string) => {
@@ -713,12 +739,34 @@ export default function CoworkPage() {
                 </div>
               ))}
             </div>
-            <button
-              onClick={addAgent}
-              className="w-full mt-2 py-2 text-xs text-muted hover:text-foreground border border-dashed border-border rounded-lg hover:bg-surface-light transition-colors"
-            >
-              + Add Agent
-            </button>
+            <div className="relative mt-2">
+              <button
+                onClick={() => setShowAgentPicker(!showAgentPicker)}
+                className="w-full py-2 text-xs text-muted hover:text-foreground border border-dashed border-border rounded-lg hover:bg-surface-light transition-colors"
+              >
+                + Add Agent
+              </button>
+              {showAgentPicker && (
+                <div className="absolute left-0 right-0 bottom-full mb-1 bg-surface border border-border rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                  <div className="p-1.5">
+                    <div className="text-[9px] text-muted uppercase tracking-wider px-2 py-1 font-semibold">Premade Agents</div>
+                    {PREMADE_AGENTS.map((preset) => (
+                      <button
+                        key={preset.name}
+                        onClick={() => addAgent(preset)}
+                        className="w-full flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-surface-light transition-colors text-left"
+                      >
+                        <span className="text-sm shrink-0 mt-0.5">{preset.icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-foreground">{preset.name}</div>
+                          <div className="text-[10px] text-muted leading-tight truncate">{preset.role.slice(0, 60)}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="p-4 flex-1">

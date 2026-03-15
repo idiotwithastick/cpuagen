@@ -282,6 +282,102 @@ function WaitlistForm() {
   );
 }
 
+/* ─── Email-gated Launch Console ─── */
+function EmailGatedLaunch() {
+  const [email, setEmail] = useState("");
+  const [hasAccess, setHasAccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showInput, setShowInput] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("cpuagen_console_email");
+      if (stored) setHasAccess(true);
+    } catch { /* */ }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes("@") || !trimmed.includes(".")) {
+      setError("Please enter a valid email");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "subscribe", email: trimmed }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        try {
+          localStorage.setItem("cpuagen_console_email", trimmed);
+          localStorage.setItem("cpuagen_waitlist_email", trimmed);
+        } catch { /* */ }
+        setHasAccess(true);
+        window.location.href = "/app/chat";
+      } else {
+        setError(data.error || "Something went wrong");
+      }
+    } catch {
+      setError("Network error — please try again");
+    }
+    setLoading(false);
+  };
+
+  if (hasAccess) {
+    return (
+      <a
+        href="/app/chat"
+        className="px-8 py-3 rounded-lg bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-all duration-200 hover:glow-accent"
+      >
+        Launch Console
+      </a>
+    );
+  }
+
+  if (!showInput) {
+    return (
+      <button
+        onClick={() => setShowInput(true)}
+        className="px-8 py-3 rounded-lg bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-all duration-200 hover:glow-accent cursor-pointer"
+      >
+        Launch Console
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col items-center gap-2">
+      <div className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Enter your email to continue"
+          required
+          autoFocus
+          disabled={loading}
+          className="px-4 py-3 rounded-lg bg-surface border border-accent/30 text-foreground placeholder:text-muted/50 font-mono text-sm focus:outline-none focus:border-accent/50 transition-colors disabled:opacity-50 w-64"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-all duration-200 hover:glow-accent cursor-pointer disabled:opacity-50"
+        >
+          {loading ? "..." : "Go"}
+        </button>
+      </div>
+      {error && <div className="text-red-400 text-xs font-mono">{error}</div>}
+      <p className="text-[10px] text-muted">Your email lets us notify you of updates</p>
+    </form>
+  );
+}
+
 /* ─── Live engine stats hook ─── */
 function useLiveStats() {
   const [stats, setStats] = useState<{
@@ -366,12 +462,7 @@ export default function Home() {
 
           <div className="flex flex-col items-center gap-4 mb-16">
             <div className="flex flex-col sm:flex-row items-center gap-3">
-              <a
-                href="/app/chat"
-                className="px-8 py-3 rounded-lg bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-all duration-200 hover:glow-accent"
-              >
-                Launch Console
-              </a>
+              <EmailGatedLaunch />
               <span className="text-muted text-xs">or</span>
               <WaitlistForm />
             </div>
@@ -451,7 +542,7 @@ export default function Home() {
             <FeatureCard
               icon={"\uD83D\uDEE1\uFE0F"}
               title="9 Safety Barriers"
-              description="Truth, naturality, energy, thermal stability, coherence, output guard, quality, synergy, and free energy. All 9 independent Control Barrier Functions must pass or the output is blocked."
+              description="Nine independent safety checks validate every output across truth, coherence, quality, and more. All 9 must pass or the output is blocked — no exceptions."
               metric={"ALL 9 SAFE \u2192 EMIT | ANY UNSAFE \u2192 BLOCK"}
             />
             <FeatureCard
@@ -468,45 +559,45 @@ export default function Home() {
             />
             <FeatureCard
               icon={"\uD83D\uDD2C"}
-              title="Multi-Dimensional Indexing"
-              description="Advanced spatial indexing reduces knowledge lookup complexity by 9x. Queries find validated answers through intelligent multi-pass retrieval."
-              metric="9x faster lookups · v14.0"
+              title="Intelligent Retrieval"
+              description="Advanced indexing makes knowledge lookups dramatically faster. Queries find validated answers through intelligent multi-pass retrieval across millions of cached states."
+              metric="Sub-millisecond lookups"
             />
             <FeatureCard
               icon={"\uD83D\uDE80"}
-              title="Semantic Cannon"
-              description="3-stage golden-ratio entropy compression: Cannon Fire, Cavitation, and Mach Diamond lock. Watch the full pipeline in the interactive Physics Lab on the Dashboard."
-              metric="3-stage golden pipeline"
+              title="Multi-Stage Compression"
+              description="Proprietary multi-stage entropy compression pipeline reduces prompts to their semantic essence before validation. Watch the full pipeline in the interactive Physics Lab."
+              metric="Proprietary compression pipeline"
             />
             <FeatureCard
               icon={"\uD83D\uDCCA"}
               title="Ensemble Consensus"
-              description="Query 2-6 LLM providers simultaneously. Thermosolve each response independently, compute weighted centroids, detect outliers, and converge on a validated consensus answer."
+              description="Query 2-6 LLM providers simultaneously. Validate each response independently, compute weighted centroids, detect outliers, and converge on a validated consensus answer."
               metric="Multi-provider agreement scoring"
             />
             <FeatureCard
               icon={"\uD83C\uDFAF"}
-              title="Fisher Geometry"
-              description="The enforcement engine learns via Riemannian geometry. A 7x7 Fisher information matrix tracks dimension correlations. Weights adapt in real-time based on which semantic dimensions matter most."
-              metric="Riemannian manifold · adaptive weights"
+              title="Adaptive Geometry"
+              description="The enforcement engine uses advanced differential geometry to learn which dimensions of meaning matter most. Weights adapt in real-time as the system processes more queries."
+              metric="Self-tuning validation weights"
             />
             <FeatureCard
               icon={"\uD83D\uDEE0\uFE0F"}
               title="Code + Workspace + Lab"
-              description={"Full IDE in the browser. Chat, code canvas, PDF markup, dev lab, and interactive Physics Lab \u2014 all through the enforcement layer. Try the Lab to see thermosolve, CBFs, and the Semantic Cannon in real-time."}
+              description={"Full IDE in the browser. Chat, code canvas, PDF markup, dev lab, and interactive Physics Lab \u2014 all through the enforcement layer. Try the Lab to see the validation engine in real-time."}
               metric="Chat · Lab · Code · Dual · Dev"
             />
             <FeatureCard
               icon={"\uD83D\uDDDC\uFE0F"}
-              title="Bekenstein Compression"
-              description="Every TEEP signature is compressed to the theoretical maximum information density — the Bekenstein bound from black hole physics. Optimal storage while preserving all meaningful semantic content."
-              metric={"S_max = 2\u03C0RE/\u210Fc"}
+              title="Maximum-Density Storage"
+              description="Every knowledge signature is compressed to the theoretical maximum information density. Optimal storage while preserving all meaningful semantic content — no bits wasted."
+              metric="Theoretical max compression"
             />
             <FeatureCard
               icon={"\uD83D\uDCA0"}
-              title="Mach Diamond Detection"
-              description="When multiple queries converge on the same semantic region, the engine detects standing-wave interference patterns — Mach Diamonds. These mark high-confidence knowledge convergence zones."
-              metric="Standing-wave convergence"
+              title="Convergence Detection"
+              description="When multiple queries converge on the same semantic region, the engine detects interference patterns that mark high-confidence knowledge zones. More convergence means higher trust."
+              metric="Multi-query confidence scoring"
             />
             <FeatureCard
               icon={"\uD83D\uDD17"}
@@ -517,7 +608,7 @@ export default function Home() {
             <FeatureCard
               icon={"\uD83D\uDD04"}
               title="Multi-Turn Agent Loop"
-              description="Tier 2 autonomous agents plan, execute tools, observe results, and iterate. Web search, code execution, calculations, URL fetching — all CBF-enforced at every step."
+              description="Tier 2 autonomous agents plan, execute tools, observe results, and iterate. Web search, code execution, calculations, URL fetching — all validated at every step."
               metric="Plan · Execute · Observe · Decide"
             />
           </div>
