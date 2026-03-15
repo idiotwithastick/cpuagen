@@ -64,6 +64,7 @@ export default function AutomatePage() {
   const [tab, setTab] = useState<"natural" | "execute" | "saved">("natural");
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [enforcement, setEnforcement] = useState<EnforcementBadge | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   // Load settings + saved recordings from localStorage
@@ -328,11 +329,20 @@ export default function AutomatePage() {
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="px-6 py-4 border-b border-border">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">Browser Automation</h1>
-            <p className="text-xs text-muted mt-0.5">
-              Plan, save, and execute web automation tasks with AI-powered tool calling
-            </p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-xl font-semibold">Browser Automation</h1>
+              <p className="text-xs text-muted mt-0.5">
+                Plan, save, and execute web automation tasks with AI-powered tool calling
+              </p>
+            </div>
+            <button
+              onClick={() => setShowHelp(!showHelp)}
+              className={`px-2 py-1 rounded-md text-xs font-mono border transition-colors cursor-pointer ${showHelp ? "bg-accent/20 text-accent-light border-accent/30" : "text-muted border-border hover:border-accent/30 hover:text-accent-light"}`}
+              title="How to use Automate"
+            >
+              ?
+            </button>
           </div>
           {steps.length > 0 && !executing && (
             <button
@@ -353,6 +363,21 @@ export default function AutomatePage() {
           )}
         </div>
       </div>
+
+      {/* Help Panel */}
+      {showHelp && (
+        <div className="px-6 py-3 bg-surface/80 border-b border-border space-y-1.5 text-xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-medium text-foreground">How to Use Browser Automation</span>
+            <button onClick={() => setShowHelp(false)} className="text-muted hover:text-foreground text-[10px] cursor-pointer">&times;</button>
+          </div>
+          <p className="text-muted"><strong>1. Plan tab</strong> — Enter a target URL and describe what you want automated (e.g., &quot;scrape all product prices&quot;). Use a template to get started fast.</p>
+          <p className="text-muted"><strong>2. Generate Plan</strong> — The AI creates step-by-step actions (navigate, click, extract, etc.). Review and edit the steps.</p>
+          <p className="text-muted"><strong>3. Execute tab</strong> — Run the plan. The agent executes each step using tool calling and shows progress in real time.</p>
+          <p className="text-muted"><strong>4. Saved tab</strong> — Plans are saved automatically. Re-run, edit, or delete saved automations anytime.</p>
+          <p className="text-[10px] text-muted/60">Requires a configured AI provider (OpenAI, Anthropic, Google, or xAI). Set API keys in Settings.</p>
+        </div>
+      )}
 
       <div className="flex gap-1 px-6 pt-3">
         {(["natural", "execute", "saved"] as const).map((t) => (

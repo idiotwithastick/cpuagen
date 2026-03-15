@@ -731,6 +731,7 @@ export default function ChatPage() {
   const [activeTab, setActiveTab] = useState<"canvas" | "preview" | "markup">("canvas");
   const [consoleOutput, setConsoleOutput] = useState<ConsoleEntry[]>([]);
   const [markupPdfData, setMarkupPdfData] = useState<ArrayBuffer | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const [markupPdfName, setMarkupPdfName] = useState("");
   const [markupAnnotations, setMarkupAnnotations] = useState<PageAnnotations>({});
   const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([]);
@@ -1448,6 +1449,13 @@ export default function ChatPage() {
             {"\uD83E\uDDF2"} Macros
           </button>
           <button
+            onClick={() => setShowHelp(!showHelp)}
+            className={`px-2 py-1 rounded-md text-[10px] font-mono border transition-colors cursor-pointer ${showHelp ? "bg-accent/20 text-accent-light border-accent/30" : "text-muted border-border hover:border-accent/30 hover:text-accent-light"}`}
+            title="How to use Chat"
+          >
+            ?
+          </button>
+          <button
             onClick={startNewChat}
             disabled={loading}
             className="px-2.5 py-1 rounded-md text-[10px] font-mono text-muted border border-border hover:border-accent/30 hover:text-accent-light transition-colors cursor-pointer disabled:opacity-30"
@@ -1565,6 +1573,22 @@ export default function ChatPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Help Panel */}
+      {showHelp && (
+        <div className="px-4 py-3 bg-surface/80 border-b border-border space-y-1.5 text-xs shrink-0">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-medium text-foreground">How to Use Chat</span>
+            <button onClick={() => setShowHelp(false)} className="text-muted hover:text-foreground text-[10px] cursor-pointer">&times;</button>
+          </div>
+          <p className="text-muted"><strong>1. Pick a provider</strong> — Select your AI model from the dropdown in the header (e.g., OpenAI GPT-4, Anthropic Claude, Google Gemini).</p>
+          <p className="text-muted"><strong>2. Type your message</strong> — Ask anything in the input box below. Every message passes through physics-based safety enforcement.</p>
+          <p className="text-muted"><strong>3. Code canvas</strong> — When the AI generates code, it opens in an interactive canvas on the right. You can edit, preview HTML, and iterate.</p>
+          <p className="text-muted"><strong>4. History</strong> — Click the menu icon (top-left) to see past conversations. They auto-save and can be exported as PDF/DOCX/XLSX.</p>
+          <p className="text-muted"><strong>5. Detail level</strong> — Use the Concise/Standard/Detailed toggle to control response length.</p>
+          <p className="text-[10px] text-muted/60">Set API keys in Settings. Free demo mode uses Cloudflare AI (no key needed).</p>
+        </div>
       )}
 
       {/* Messages */}

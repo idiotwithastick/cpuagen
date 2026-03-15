@@ -190,6 +190,7 @@ export default function CodePage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [showHelp, setShowHelp] = useState(false);
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -495,7 +496,29 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
           >
             +
           </button>
+          <button
+            onClick={() => setShowHelp(!showHelp)}
+            className={`ml-auto px-2 py-1 text-xs rounded cursor-pointer transition-colors ${showHelp ? "bg-accent/20 text-accent-light" : "text-muted hover:text-foreground"}`}
+            title="How to use Code Editor"
+          >
+            ?
+          </button>
         </div>
+
+        {/* Help Panel */}
+        {showHelp && (
+          <div className="px-4 py-3 bg-surface/80 border-b border-border space-y-1.5 text-xs">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-medium text-foreground">How to Use the Code Editor</span>
+              <button onClick={() => setShowHelp(false)} className="text-muted hover:text-foreground text-[10px] cursor-pointer">&times;</button>
+            </div>
+            <p className="text-muted"><strong>1. Files</strong> — Use the file tree (left) to create/open files. Click <strong>+</strong> in the tab bar to add more.</p>
+            <p className="text-muted"><strong>2. Edit</strong> — The editor supports syntax highlighting for 20+ languages. Type code directly.</p>
+            <p className="text-muted"><strong>3. AI Help</strong> — Type an instruction in the terminal input below (e.g., &quot;add error handling&quot;, &quot;convert to TypeScript&quot;). The AI will modify your code.</p>
+            <p className="text-muted"><strong>4. Terminal</strong> — Shows AI responses, diffs, and execution output. Use Diff view to review changes before applying.</p>
+            <p className="text-[10px] text-muted/60">Files are saved in your browser. Set your AI provider in Settings.</p>
+          </div>
+        )}
 
         {/* Split: Editor (top) + Terminal (bottom) */}
         <div className="flex-1 flex flex-col min-h-0">
