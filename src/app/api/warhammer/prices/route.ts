@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getPricesForProduct, getLastScrapeTime } from "@/lib/warhammer-db";
+import { thermosolve, cbfCheck } from "@/lib/enforcement";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const sig = thermosolve(`warhammer-prices:${productId}`);
+    const cbf = cbfCheck(sig);
+    if (!cbf.safe) {
+      return Response.json(
+        { ok: false, error: "Request blocked by enforcement", barriers: cbf.failures },
+        { status: 403 },
+      );
+    }
+
+    // Special case: just get last scrape time without querying a fake product
+    if (productId === "_check_time") {
+      const lastScrape = await getLastScrapeTime();
+      return Response.json({ ok: true, prices: [], last_updated: lastScrape });
+    }
+
     const prices = await getPricesForProduct(productId);
     const lastScrape = await getLastScrapeTime();
 

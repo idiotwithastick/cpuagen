@@ -4,6 +4,7 @@ import {
   getProductsWithBestPrices,
   getFactions,
 } from "@/lib/warhammer-db";
+import { thermosolve, cbfCheck } from "@/lib/enforcement";
 import type { GameSystem } from "@/lib/warhammer-types";
 
 export const runtime = "nodejs";
@@ -22,6 +23,15 @@ export async function GET(req: NextRequest) {
   const offset = parseInt(searchParams.get("offset") || "0");
 
   try {
+    const sig = thermosolve(`warhammer-products:${action}:${query}`);
+    const cbf = cbfCheck(sig);
+    if (!cbf.safe) {
+      return Response.json(
+        { ok: false, error: "Request blocked by enforcement", barriers: cbf.failures },
+        { status: 403 },
+      );
+    }
+
     if (action === "factions") {
       const factions = await getFactions(gameSystem || undefined);
       return Response.json({ ok: true, factions });

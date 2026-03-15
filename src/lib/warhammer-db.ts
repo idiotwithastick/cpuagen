@@ -63,19 +63,79 @@ export async function searchProducts(
   query: string,
   gameSystem?: GameSystem,
   factionId?: string,
-): Promise<WHProduct[]> {
-  let sql = "SELECT * FROM wh_products WHERE name LIKE ?";
+): Promise<WHProductWithPrices[]> {
+  // Single JOIN query — returns products with prices, no N+1
+  let where = "WHERE p.name LIKE ?";
   const params: (string | number)[] = [`%${query}%`];
   if (gameSystem) {
-    sql += " AND game_system = ?";
+    where += " AND p.game_system = ?";
     params.push(gameSystem);
   }
   if (factionId) {
-    sql += " AND faction_id = ?";
+    where += " AND p.faction_id = ?";
     params.push(factionId);
   }
-  sql += " ORDER BY name LIMIT 100";
-  return d1Query<WHProduct>(sql, params);
+
+  const rows = await d1Query<Record<string, unknown>>(
+    `SELECT p.*, pr.id as price_id, pr.retailer, pr.price, pr.currency, pr.url as price_url,
+            pr.in_stock, pr.price_per_model, pr.price_per_point, pr.scraped_at
+     FROM wh_products p
+     LEFT JOIN wh_prices pr ON pr.product_id = p.id
+     ${where}
+     ORDER BY p.name LIMIT 300`,
+    params,
+  );
+
+  // Group by product
+  const productMap = new Map<string, WHProductWithPrices>();
+  for (const row of rows) {
+    const pid = row.id as string;
+    if (!productMap.has(pid)) {
+      productMap.set(pid, {
+        id: pid,
+        name: row.name as string,
+        faction_id: row.faction_id as string,
+        game_system: row.game_system as GameSystem,
+        models_in_box: row.models_in_box as number,
+        points_per_unit: row.points_per_unit as number,
+        gw_sku: row.gw_sku as string | null,
+        image_url: row.image_url as string | null,
+        keywords: row.keywords as string | null,
+        updated_at: row.updated_at as number,
+        prices: [],
+        best_price_per_model: null,
+        best_price_per_point: null,
+        best_retailer: null,
+      });
+    }
+    if (row.price_id) {
+      productMap.get(pid)!.prices.push({
+        id: row.price_id as string,
+        product_id: pid,
+        retailer: row.retailer as string,
+        price: row.price as number,
+        currency: row.currency as string,
+        url: row.price_url as string | null,
+        in_stock: Boolean(row.in_stock),
+        price_per_model: row.price_per_model as number,
+        price_per_point: row.price_per_point as number,
+        scraped_at: row.scraped_at as number,
+      });
+    }
+  }
+
+  const results: WHProductWithPrices[] = [];
+  for (const product of productMap.values()) {
+    product.prices.sort((a, b) => a.price_per_model - b.price_per_model);
+    const inStock = product.prices.filter((p) => p.in_stock);
+    const best = inStock[0] || null;
+    product.best_price_per_model = best?.price_per_model ?? null;
+    product.best_price_per_point = best?.price_per_point ?? null;
+    product.best_retailer = best?.retailer ?? null;
+    results.push(product);
+  }
+
+  return results.slice(0, 100);
 }
 
 export async function getProductsByFaction(factionId: string): Promise<WHProduct[]> {
@@ -111,6 +171,7 @@ export async function getProductsWithBestPrices(
   limit = 50,
   offset = 0,
 ): Promise<WHProductWithPrices[]> {
+  // Single JOIN query — no N+1 problem
   let where = "WHERE 1=1";
   const params: (string | number)[] = [];
   if (gameSystem) {
@@ -122,42 +183,86 @@ export async function getProductsWithBestPrices(
     params.push(factionId);
   }
 
-  const products = await d1Query<WHProduct>(
-    `SELECT p.* FROM wh_products p ${where} ORDER BY p.name LIMIT ? OFFSET ?`,
-    [...params, limit, offset],
+  const sortCol =
+    sortBy === "price_per_point" ? "pr.price_per_point" :
+    sortBy === "price" ? "pr.price" :
+    "pr.price_per_model";
+
+  const rows = await d1Query<Record<string, unknown>>(
+    `SELECT p.*, pr.id as price_id, pr.retailer, pr.price, pr.currency, pr.url as price_url,
+            pr.in_stock, pr.price_per_model, pr.price_per_point, pr.scraped_at
+     FROM wh_products p
+     LEFT JOIN wh_prices pr ON pr.product_id = p.id
+     ${where}
+     ORDER BY ${sortCol} ASC NULLS LAST, p.name
+     LIMIT ? OFFSET ?`,
+    [...params, limit * 3, offset],
   );
 
+  // Group rows by product, collecting prices
+  const productMap = new Map<string, WHProductWithPrices>();
+  for (const row of rows) {
+    const pid = row.id as string;
+    if (!productMap.has(pid)) {
+      productMap.set(pid, {
+        id: pid,
+        name: row.name as string,
+        faction_id: row.faction_id as string,
+        game_system: row.game_system as GameSystem,
+        models_in_box: row.models_in_box as number,
+        points_per_unit: row.points_per_unit as number,
+        gw_sku: row.gw_sku as string | null,
+        image_url: row.image_url as string | null,
+        keywords: row.keywords as string | null,
+        updated_at: row.updated_at as number,
+        prices: [],
+        best_price_per_model: null,
+        best_price_per_point: null,
+        best_retailer: null,
+      });
+    }
+    if (row.price_id) {
+      const price: WHPrice = {
+        id: row.price_id as string,
+        product_id: pid,
+        retailer: row.retailer as string,
+        price: row.price as number,
+        currency: row.currency as string,
+        url: row.price_url as string | null,
+        in_stock: Boolean(row.in_stock),
+        price_per_model: row.price_per_model as number,
+        price_per_point: row.price_per_point as number,
+        scraped_at: row.scraped_at as number,
+      };
+      productMap.get(pid)!.prices.push(price);
+    }
+  }
+
+  // Compute best prices
   const results: WHProductWithPrices[] = [];
-  for (const product of products) {
-    const prices = await getPricesForProduct(product.id);
-    const inStockPrices = prices.filter((p) => p.in_stock);
-    const bestPrice = inStockPrices.length > 0 ? inStockPrices[0] : null;
-    results.push({
-      ...product,
-      prices,
-      best_price_per_model: bestPrice?.price_per_model ?? null,
-      best_price_per_point: bestPrice?.price_per_point ?? null,
-      best_retailer: bestPrice?.retailer ?? null,
-    });
+  for (const product of productMap.values()) {
+    product.prices.sort((a, b) => a.price_per_model - b.price_per_model);
+    const inStock = product.prices.filter((p) => p.in_stock);
+    const best = inStock[0] || null;
+    product.best_price_per_model = best?.price_per_model ?? null;
+    product.best_price_per_point = best?.price_per_point ?? null;
+    product.best_retailer = best?.retailer ?? null;
+    results.push(product);
   }
 
   results.sort((a, b) => {
     const aVal =
-      sortBy === "price_per_model"
-        ? a.best_price_per_model
-        : sortBy === "price_per_point"
-          ? a.best_price_per_point
-          : a.prices[0]?.price ?? Infinity;
+      sortBy === "price_per_model" ? a.best_price_per_model :
+      sortBy === "price_per_point" ? a.best_price_per_point :
+      a.prices[0]?.price ?? Infinity;
     const bVal =
-      sortBy === "price_per_model"
-        ? b.best_price_per_model
-        : sortBy === "price_per_point"
-          ? b.best_price_per_point
-          : b.prices[0]?.price ?? Infinity;
+      sortBy === "price_per_model" ? b.best_price_per_model :
+      sortBy === "price_per_point" ? b.best_price_per_point :
+      b.prices[0]?.price ?? Infinity;
     return (aVal ?? Infinity) - (bVal ?? Infinity);
   });
 
-  return results;
+  return results.slice(0, limit);
 }
 
 export async function optimizeArmyPurchase(

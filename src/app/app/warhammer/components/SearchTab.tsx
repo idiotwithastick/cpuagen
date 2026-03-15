@@ -27,26 +27,8 @@ export default function SearchTab() {
       const res = await fetch(`/api/warhammer/products?${params}`);
       const data = await res.json();
       if (data.ok) {
-        const enriched: WHProductWithPrices[] = [];
-        for (const product of data.products.slice(0, 20)) {
-          const priceRes = await fetch(
-            `/api/warhammer/prices?product_id=${product.id}`,
-          );
-          const priceData = await priceRes.json();
-          const prices = priceData.ok ? priceData.prices : [];
-          const inStock = prices.filter(
-            (p: { in_stock: boolean }) => p.in_stock,
-          );
-          const best = inStock[0] || null;
-          enriched.push({
-            ...product,
-            prices,
-            best_price_per_model: best?.price_per_model ?? null,
-            best_price_per_point: best?.price_per_point ?? null,
-            best_retailer: best?.retailer ?? null,
-          });
-        }
-        setResults(enriched);
+        // Products already include prices from server-side JOIN — no N+1
+        setResults(data.products);
       }
     } catch (err) {
       console.error("Search failed:", err);

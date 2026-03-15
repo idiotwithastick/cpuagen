@@ -28,11 +28,12 @@ class MiniatureMarketScraper(BaseScraper):
 
     def scrape(self) -> list[dict]:
         results = []
+        per_page = 24  # MM default page size
         for game_system, path in MM_CATEGORIES.items():
             print(f"  [{self.name}] Scraping {game_system}...")
             page = 1
             while True:
-                url = f"{self.base_url}{path}?p={page}&product_list_limit=100"
+                url = f"{self.base_url}{path}?p={page}&product_list_limit={per_page}"
                 resp = self.get(url)
                 if not resp:
                     break
@@ -45,13 +46,22 @@ class MiniatureMarketScraper(BaseScraper):
                 results.extend(products)
                 print(f"    Page {page}: {len(products)} products")
 
-                # Check for next page — try multiple selector patterns
+                # If we got fewer products than per_page, this is the last page
+                if len(products) < per_page:
+                    break
+
+                # Also check for next page link as a secondary signal
                 next_link = (
                     soup.select_one("a.action.next")
                     or soup.select_one("a[rel='next']")
-                    or soup.select_one(".pagination a.next")
+                    or soup.select_one(".pages a.next")
+                    or soup.select_one("li.pages-item-next a")
+                    or soup.select_one(".toolbar .next")
                 )
-                if not next_link or page >= 80:  # Safety cap
+
+                # Safety cap at 80 pages
+                if page >= 80:
+                    print(f"    Reached safety cap of {page} pages")
                     break
                 page += 1
 

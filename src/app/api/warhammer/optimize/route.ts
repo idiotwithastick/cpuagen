@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { optimizeArmyPurchase } from "@/lib/warhammer-db";
+import { thermosolve, cbfCheck } from "@/lib/enforcement";
 import type { ArmyListItem } from "@/lib/warhammer-types";
 
 export const runtime = "nodejs";
@@ -18,6 +19,15 @@ export async function POST(req: NextRequest) {
       return Response.json(
         { ok: false, error: "Max 50 items per optimization" },
         { status: 400 },
+      );
+    }
+
+    const sig = thermosolve(`warhammer-optimize:${body.items.length}-items`);
+    const cbf = cbfCheck(sig);
+    if (!cbf.safe) {
+      return Response.json(
+        { ok: false, error: "Request blocked by enforcement", barriers: cbf.failures },
+        { status: 403 },
       );
     }
 
