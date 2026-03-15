@@ -1,12 +1,1 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    {
-      "name": "cpuagen-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000,
-      "cwd": "F:/SSD-RCI_9_Unifying/cpuagen"
-    }
-  ]
-}
+{"version":"0.0.1","configurations":[{"name":"cpuagen-dev","runtimeExecutable":"npx","runtimeArgs":["next","dev","--port","3099"],"port":3099}]}
