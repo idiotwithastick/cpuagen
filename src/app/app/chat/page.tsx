@@ -6,11 +6,15 @@ import dynamic from "next/dynamic";
 import type { Message, EnforcementResult, Conversation, Settings, ApiKeys, FileAttachment, PageAnnotations, AnnotationCommand } from "@/lib/types";
 import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS, FILE_LIMITS } from "@/lib/types";
 import { getChatContext, getExtensionContext } from "@/lib/system-context";
+import { getInstalledExtensionPrompts, isExtensionInstalled, getExtensionConfig } from "@/lib/extension-runtime";
 import type { ConsoleEntry } from "@/components/Canvas";
 
 const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 const Preview = dynamic(() => import("@/components/Preview"), { ssr: false });
 const GreyBeamCanvas = dynamic(() => import("@/components/GreyBeamCanvas"), { ssr: false });
+const VoiceInput = dynamic(() => import("@/components/extensions/VoiceIO").then(m => ({ default: m.VoiceInput })), { ssr: false });
+const VoiceOutput = dynamic(() => import("@/components/extensions/VoiceIO").then(m => ({ default: m.VoiceOutput })), { ssr: false });
+const ChartRenderer = dynamic(() => import("@/components/extensions/DataViz").then(m => ({ default: m.ChartRenderer })), { ssr: false });
 
 /* ─── HTML / Markdown detection ─── */
 function isHtmlContent(code: string, lang: string): boolean {
@@ -62,7 +66,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /* ─── Simple markdown renderer ─── */
-function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string) => void, onOpenPreview?: (code: string, lang: string) => void, onAnnotationCommand?: (cmds: AnnotationCommand[]) => void) {
+function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string) => void, onOpenPreview?: (code: string, lang: string) => void, onAnnotationCommand?: (cmds: AnnotationCommand[]) => void, onToolCall?: (tool: string, args: Record<string, unknown>) => void) {
   const parts: React.ReactNode[] = [];
   const lines = text.split("\n");
   let i = 0;
@@ -103,6 +107,43 @@ function renderMarkdown(text: string, onOpenCanvas?: (code: string, lang: string
           );
           continue;
         }
+      }
+
+      // Handle chart blocks (Data Viz extension)
+      if (lang === "chart") {
+        try {
+          const parsed = JSON.parse(codeText);
+          if (parsed.type && parsed.labels && parsed.datasets) {
+            parts.push(<ChartRenderer key={key++} data={parsed} />);
+            continue;
+          }
+        } catch { /* fall through to code block */ }
+      }
+
+      // Handle tool_call blocks (extension tool execution)
+      if (lang === "tool_call" && onToolCall) {
+        try {
+          const parsed = JSON.parse(codeText);
+          if (parsed.tool && parsed.args) {
+            parts.push(
+              <div key={key++} className="my-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/5 border border-accent/20">
+                <span className="text-[10px] font-mono text-accent-light">
+                  {"\u{1F527}"} {parsed.tool}
+                </span>
+                <button
+                  onClick={() => onToolCall(parsed.tool, parsed.args)}
+                  className="px-2 py-0.5 rounded text-[10px] font-mono bg-accent/20 text-accent-light hover:bg-accent/30 transition-colors cursor-pointer"
+                >
+                  Execute
+                </button>
+                <span className="text-[9px] text-muted truncate max-w-[200px]">
+                  {JSON.stringify(parsed.args).slice(0, 80)}
+                </span>
+              </div>,
+            );
+            continue;
+          }
+        } catch { /* fall through to code block */ }
       }
 
       parts.push(
@@ -549,7 +590,7 @@ function AttachmentChips({ attachments, onOpenInMarkup }: { attachments?: FileAt
 }
 
 /* ─── Message bubble ─── */
-function MessageBubble({ message, onOpenCanvas, onOpenPreview, onOpenInMarkup, onAnnotationCommand }: { message: Message; onOpenCanvas?: (code: string, lang: string) => void; onOpenPreview?: (code: string, lang: string) => void; onOpenInMarkup?: (att: FileAttachment) => void; onAnnotationCommand?: (cmds: AnnotationCommand[]) => void }) {
+function MessageBubble({ message, onOpenCanvas, onOpenPreview, onOpenInMarkup, onAnnotationCommand, onToolCall, voiceEnabled }: { message: Message; onOpenCanvas?: (code: string, lang: string) => void; onOpenPreview?: (code: string, lang: string) => void; onOpenInMarkup?: (att: FileAttachment) => void; onAnnotationCommand?: (cmds: AnnotationCommand[]) => void; onToolCall?: (tool: string, args: Record<string, unknown>) => void; voiceEnabled?: boolean }) {
   const isUser = message.role === "user";
 
   return (
@@ -559,6 +600,9 @@ function MessageBubble({ message, onOpenCanvas, onOpenPreview, onOpenInMarkup, o
           <span className="text-[10px] font-mono text-muted uppercase tracking-wider">
             {isUser ? "you" : "assistant"}
           </span>
+          {!isUser && voiceEnabled && message.content && (
+            <VoiceOutput text={message.content} />
+          )}
         </div>
         {isUser && <AttachmentChips attachments={message.attachments} onOpenInMarkup={onOpenInMarkup} />}
         <div
@@ -569,7 +613,7 @@ function MessageBubble({ message, onOpenCanvas, onOpenPreview, onOpenInMarkup, o
           }`}
         >
           {message.content ? (
-            isUser ? message.content : renderMarkdown(message.content, onOpenCanvas, onOpenPreview, onAnnotationCommand)
+            isUser ? message.content : renderMarkdown(message.content, onOpenCanvas, onOpenPreview, onAnnotationCommand, onToolCall)
           ) : (
             <span className="inline-flex gap-1">
               <span className="w-1.5 h-1.5 bg-accent-light rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -738,6 +782,8 @@ export default function ChatPage() {
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [macrosOpen, setMacrosOpen] = useState(false);
   const [detailLevel, setDetailLevel] = useState<"concise" | "standard" | "detailed">("standard");
+  const [voiceExtEnabled, setVoiceExtEnabled] = useState(false);
+  const [toolResultPending, setToolResultPending] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -781,6 +827,9 @@ export default function ChatPage() {
         }
       }
     } catch { /* not admin */ }
+
+    // Check if Voice I/O extension is installed
+    setVoiceExtEnabled(isExtensionInstalled("voice"));
 
     setHydrated(true);
     justHydratedRef.current = true;
@@ -1043,6 +1092,68 @@ export default function ChatPage() {
     setActiveTab("markup");
   }, []);
 
+  // Extension tool call handler — executes tools from AI responses and appends results
+  const handleExtensionToolCall = useCallback(async (tool: string, args: Record<string, unknown>) => {
+    setToolResultPending(tool);
+    try {
+      // Get extension config for the tool
+      const extConfigMap: Record<string, string> = {};
+      const extMapping: Record<string, string> = {
+        web_search: "web-search", code_execute: "code-interpreter", image_generate: "image-gen",
+        github_api: "github", slack_send: "slack", notion_query: "notion",
+        calendar_query: "calendar", db_query: "db-explorer", mcp_call: "mcp-server",
+      };
+      const extId = extMapping[tool];
+      if (extId) {
+        const config = getExtensionConfig(extId);
+        Object.assign(extConfigMap, config);
+      }
+
+      const res = await fetch("/api/extensions/tool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool, args, extConfig: extConfigMap }),
+      });
+      const data = await res.json();
+
+      // Append tool result as a system message that feeds back to chat
+      const toolMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: data.ok
+          ? `**Tool Result** (\`${tool}\`):\n\n${data.result}`
+          : `**Tool Error** (\`${tool}\`): ${data.error}`,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, toolMsg]);
+
+      // Handle image results specially
+      if (data.ok && tool === "image_generate") {
+        try {
+          const imgData = JSON.parse(data.result);
+          if (imgData.url) {
+            const imgMsg: Message = {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: `![Generated Image](${imgData.url})\n\n${imgData.revised_prompt ? `*${imgData.revised_prompt}*` : ""}`,
+              timestamp: Date.now(),
+            };
+            setMessages((prev) => [...prev, imgMsg]);
+          }
+        } catch { /* not image JSON */ }
+      }
+    } catch (err) {
+      const errMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: `**Tool Error** (\`${tool}\`): ${err instanceof Error ? err.message : String(err)}`,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, errMsg]);
+    }
+    setToolResultPending(null);
+  }, []);
+
   const handleAnnotationCommand = useCallback((cmds: AnnotationCommand[]) => {
     setMarkupAnnotations((prev) => {
       const next = { ...prev };
@@ -1133,7 +1244,8 @@ export default function ChatPage() {
       // Use shared system context — getChatContext() includes identity, IP protection,
       // knowledge base, Canvas/Preview/GreyBeam features, and all chat-specific content
       const extCtx = getExtensionContext();
-      allMessages.push({ role: "system", content: getChatContext() + extCtx });
+      const extToolPrompts = getInstalledExtensionPrompts();
+      allMessages.push({ role: "system", content: getChatContext() + extCtx + extToolPrompts });
 
       // Add user's custom system prompt if configured
       if (systemPrompt.trim()) {
@@ -1642,7 +1754,7 @@ export default function ChatPage() {
               </div>
             );
           }
-          return <MessageBubble key={msg.id} message={msg} onOpenCanvas={openCanvas} onOpenPreview={openPreview} onOpenInMarkup={openInMarkup} onAnnotationCommand={handleAnnotationCommand} />;
+          return <MessageBubble key={msg.id} message={msg} onOpenCanvas={openCanvas} onOpenPreview={openPreview} onOpenInMarkup={openInMarkup} onAnnotationCommand={handleAnnotationCommand} onToolCall={handleExtensionToolCall} voiceEnabled={voiceExtEnabled} />;
         })}
         <div ref={messagesEndRef} />
       </div>
@@ -1673,6 +1785,14 @@ export default function ChatPage() {
           </div>
         )}
 
+        {/* Tool execution indicator */}
+        {toolResultPending && (
+          <div className="max-w-3xl mx-auto mb-2 px-3 py-1.5 rounded-lg bg-accent/5 border border-accent/20 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-accent-light rounded-full animate-pulse" />
+            <span className="text-[10px] font-mono text-accent-light">Executing {toolResultPending}...</span>
+          </div>
+        )}
+
         <div
           className="max-w-3xl mx-auto flex gap-2"
           onDrop={handleDrop}
@@ -1699,6 +1819,14 @@ export default function ChatPage() {
               <path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5l5.8-5.8a2.1 2.1 0 013 3L6.2 11.8a1.1 1.1 0 01-1.5-1.5L10 5" />
             </svg>
           </button>
+
+          {/* Voice input button (Voice I/O extension) */}
+          {voiceExtEnabled && (
+            <VoiceInput
+              onTranscript={(text) => setInput(text)}
+              disabled={loading}
+            />
+          )}
 
           <textarea
             ref={textareaRef}

@@ -143,6 +143,78 @@ export default function AgentPage() {
 
   const hasValidProvider = ["openai", "anthropic", "google", "xai"].includes(settings.activeProvider);
 
+  // ─── Topic Randomizer ───
+  const RANDOM_TOPICS: { category: string; icon: string; topics: string[] }[] = [
+    {
+      category: "Research",
+      icon: "\uD83D\uDD2C",
+      topics: [
+        "Research the latest developments in quantum error correction and summarize the top 3 approaches with their pros and cons",
+        "Search for the current state of nuclear fusion energy and calculate the projected cost per kWh compared to solar",
+        "Find and summarize the top 5 most cited machine learning papers from the last 6 months",
+        "Research the current status of mRNA vaccine technology beyond COVID — what diseases are being targeted?",
+        "Look up the latest breakthroughs in room-temperature superconductors and evaluate their credibility",
+        "Research the environmental impact of cryptocurrency mining — find current energy consumption stats and compare to countries",
+        "Find the latest advances in CRISPR gene editing for treating genetic diseases in humans",
+        "Research the current state of brain-computer interfaces — compare Neuralink, Synchron, and academic approaches",
+      ],
+    },
+    {
+      category: "Calculate",
+      icon: "\uD83E\uDDEE",
+      topics: [
+        "Calculate the orbital mechanics for a Hohmann transfer orbit from Earth to Mars. Include delta-v requirements and travel time.",
+        "Compute the compound interest on $10,000 invested at various rates (3%, 5%, 7%, 10%) over 10, 20, and 30 years. Show a comparison table.",
+        "Calculate the Shannon entropy of the English alphabet based on letter frequencies, then compare to a perfectly uniform distribution",
+        "Compute the Fibonacci sequence up to n=50, then calculate the ratio of consecutive terms to demonstrate golden ratio convergence",
+        "Calculate Earth's escape velocity from first principles using G, M, and R. Then compare to escape velocities of other planets.",
+        "Solve the birthday problem: compute the probability of shared birthdays for groups of 5, 10, 23, 50, and 100 people",
+        "Calculate the information-theoretic limits of a 5G channel at 100MHz bandwidth with various SNR values using Shannon's formula",
+        "Compute the eigenvalues of a 3x3 matrix [[2,1,0],[1,3,1],[0,1,2]] and verify by checking the characteristic polynomial",
+      ],
+    },
+    {
+      category: "Code & Run",
+      icon: "\uD83D\uDCBB",
+      topics: [
+        "Write and execute a Monte Carlo simulation to estimate pi using 1 million random points",
+        "Code a binary search tree with insert, search, delete, and in-order traversal. Test it with 20 random numbers.",
+        "Implement the Sieve of Eratosthenes to find all primes up to 10,000. Count them and verify against known results.",
+        "Write a function that converts Roman numerals to integers and back. Test edge cases like MCMXCIV and 3999.",
+        "Implement a basic LRU cache with O(1) get and put operations. Test with a sequence of 50 operations.",
+        "Code a maze generator using recursive backtracking, then solve it with A* pathfinding. Output the maze as ASCII art.",
+        "Write a function to detect if a string has all unique characters using 3 different approaches (brute force, set, bit manipulation) and benchmark them",
+        "Implement quicksort, mergesort, and heapsort. Generate 10,000 random numbers and benchmark all three.",
+      ],
+    },
+    {
+      category: "Multi-Step",
+      icon: "\uD83D\uDD04",
+      topics: [
+        "Fetch the current weather for Tokyo, calculate the heat index, then search for historical weather data to determine if today is above or below average",
+        "Search for the top 10 programming languages by popularity, fetch their Wikipedia pages, and compile a comparison table of paradigms, typing, and year created",
+        "Find the current price of gold, calculate how many ounces $50,000 would buy, then research the 10-year price trend",
+        "Search for the ISS current location, calculate its orbital period, then find when it will next pass over New York",
+        "Research 5 different sorting algorithms, implement them in code, benchmark each on arrays of 1000 elements, and rank by performance",
+        "Fetch current cryptocurrency prices for BTC, ETH, and SOL, calculate 30-day returns, then search for analyst predictions",
+        "Find the population of the 10 largest US cities, calculate population density for each, then search for their cost-of-living indices",
+        "Research the latest SpaceX launch, calculate the orbital parameters, then search for the payload details and mission outcome",
+      ],
+    },
+  ];
+
+  const rollRandomTopic = () => {
+    const allTopics = RANDOM_TOPICS.flatMap((cat) => cat.topics);
+    const randomIndex = Math.floor(Math.random() * allTopics.length);
+    setQuery(allTopics[randomIndex]);
+  };
+
+  const rollCategoryTopic = (categoryIdx: number) => {
+    const topics = RANDOM_TOPICS[categoryIdx].topics;
+    const randomIndex = Math.floor(Math.random() * topics.length);
+    setQuery(topics[randomIndex]);
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
@@ -205,6 +277,32 @@ export default function AgentPage() {
                 {t}
               </span>
             ))}
+          </div>
+
+          {/* Topic Randomizer */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={rollRandomTopic}
+              disabled={running}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium bg-accent/10 text-accent-light border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-40 cursor-pointer"
+              title="Roll a random topic"
+            >
+              <span className="text-sm">{"\uD83C\uDFB2"}</span>
+              Random Topic
+            </button>
+            <div className="flex gap-1">
+              {RANDOM_TOPICS.map((cat, idx) => (
+                <button
+                  key={cat.category}
+                  onClick={() => rollCategoryTopic(idx)}
+                  disabled={running}
+                  className="px-2 py-1 rounded text-[9px] text-muted hover:text-foreground bg-surface-light hover:bg-surface-light/80 transition-colors disabled:opacity-40 cursor-pointer"
+                  title={`Random ${cat.category} topic`}
+                >
+                  {cat.icon} {cat.category}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
