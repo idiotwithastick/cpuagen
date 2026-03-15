@@ -56,6 +56,8 @@ export default function MemoryPage() {
   const [knowledge, setKnowledge] = useState<EngineKnowledge | null>(null);
   const [engineMetrics, setEngineMetrics] = useState<EngineMetrics | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewingConv, setViewingConv] = useState<{ id: string; title: string; messages: Array<{ role: string; content: string; timestamp?: number }> } | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
   const loadConversations = useCallback(async () => {
     setLoading(true);
@@ -136,6 +138,18 @@ export default function MemoryPage() {
     else loadMemories();
   };
 
+  const viewConversation = async (id: string, title: string) => {
+    setViewLoading(true);
+    try {
+      const res = await fetch(`/api/memory?resource=conversations&id=${id}`);
+      const data = await res.json();
+      if (data.ok && data.conversation) {
+        setViewingConv({ id, title, messages: data.conversation.messages || [] });
+      }
+    } catch { /* ignore */ }
+    setViewLoading(false);
+  };
+
   const exportConversation = async (id: string, title: string, format: "pdf" | "docx" | "xlsx") => {
     const res = await fetch(`/api/memory?resource=conversations&id=${id}`);
     const data = await res.json();
@@ -214,6 +228,12 @@ export default function MemoryPage() {
             </div>
             <div className="flex gap-2">
               <button
+                onClick={() => viewConversation(c.id, c.title)}
+                className="px-2 py-1 text-xs rounded bg-accent/10 text-accent-light hover:bg-accent/20 transition-colors"
+              >
+                View
+              </button>
+              <button
                 onClick={() => exportConversation(c.id, c.title, "pdf")}
                 className="px-2 py-1 text-xs rounded bg-surface-light hover:bg-border text-muted hover:text-foreground transition-colors"
               >
@@ -240,6 +260,46 @@ export default function MemoryPage() {
             </div>
           </div>
         ))}
+
+        {/* Conversation viewer */}
+        {viewingConv && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <h3 className="font-medium text-sm truncate">{viewingConv.title}</h3>
+                <button
+                  onClick={() => setViewingConv(null)}
+                  className="text-muted hover:text-foreground text-lg px-2"
+                >
+                  {"\u2715"}
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {viewLoading ? (
+                  <p className="text-muted text-center py-8">Loading...</p>
+                ) : viewingConv.messages.length === 0 ? (
+                  <p className="text-muted text-center py-8">No messages in this conversation</p>
+                ) : (
+                  viewingConv.messages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                        msg.role === "user"
+                          ? "bg-accent/20 text-foreground"
+                          : "bg-surface border border-border text-foreground"
+                      }`}>
+                        <div className="text-[9px] font-mono text-muted mb-1">
+                          {msg.role === "user" ? "You" : "CPUAGEN"}
+                          {msg.timestamp && <span className="ml-2">{new Date(msg.timestamp).toLocaleTimeString()}</span>}
+                        </div>
+                        <pre className="whitespace-pre-wrap font-sans text-xs">{msg.content}</pre>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {!loading && tab === "memories" && (
           <>

@@ -1137,7 +1137,15 @@ export default function DashboardPage() {
               <>
                 {/* Thermosolve Signature */}
                 <div className="bg-surface border border-border rounded-lg p-4">
-                  <h3 className="text-[10px] font-mono text-muted uppercase mb-3">Thermosolve Signature</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[10px] font-mono text-muted uppercase">Thermosolve Signature</h3>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(JSON.stringify(labResult.signature, null, 2)); }}
+                      className="text-[9px] font-mono text-muted hover:text-foreground px-2 py-0.5 rounded bg-surface-light/50 hover:bg-surface-light transition-colors"
+                    >
+                      Copy JSON
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                     {Object.entries(labResult.signature).map(([key, val]) => (
                       <div key={key} className="bg-surface-light/50 rounded p-2 text-center">
