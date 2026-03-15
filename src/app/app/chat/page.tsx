@@ -292,7 +292,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
               <>
                 <span className="text-muted">|</span>
                 <span className={enforcement.agfHitType === "FULL_HIT" || enforcement.agfHitType === "BASIN_HIT" ? "text-success" : enforcement.agfHitType === "PARTIAL_HIT" ? "text-accent-light" : "text-muted"}>
-                  {enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHE" : enforcement.agfHitType === "BASIN_HIT" ? "\u26A1 BASIN" : enforcement.agfHitType === "PARTIAL_HIT" ? "\u{1F50C} BRIDGE" : "\u{1F9EA} JIT"}
+                  {enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHED" : enforcement.agfHitType === "BASIN_HIT" ? "\u26A1 NEAR MATCH" : enforcement.agfHitType === "PARTIAL_HIT" ? "\u{1F50C} PARTIAL" : "\u{1F9EA} FRESH"}
                 </span>
                 {enforcement.basinRendered && (
                   <>
@@ -308,8 +308,8 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
                     <span className="text-success font-mono">
                       {"\u{1F4B0}"} {enforcement.tokensSaved.total.toLocaleString()} tokens saved
                       {" "}({Math.round((enforcement.tokensSaved.output / enforcement.tokensSaved.total) * 100)}% output |
-                      {" "}S={enforcement.pre.signature.S} | dS={enforcement.pre.signature.dS} | \u03C6={enforcement.pre.signature.phi} |
-                      {" "}I<sub>t</sub>={enforcement.pre.signature.I_truth ?? "—"} | \u03C8={enforcement.pre.signature.psi_coherence ?? "—"} | \u03B2T={enforcement.pre.signature.beta_T ?? "—"})
+                      {" "}info={enforcement.pre.signature.S} | conv={enforcement.pre.signature.dS} | coh={enforcement.pre.signature.phi} |
+                      {" "}truth={enforcement.pre.signature.I_truth ?? "—"} | quality={enforcement.pre.signature.psi_coherence ?? "—"} | balance={enforcement.pre.signature.beta_T ?? "—"})
                     </span>
                   </>
                 )}
@@ -324,10 +324,10 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
           </button>
         </div>
 
-        {/* Thermosolve signatures — always visible */}
+        {/* Validation signatures — always visible */}
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-muted">
           <span>
-            Input: n={pre.signature.n} {"\u00B7"} {"\u03C6"}={pre.signature.phi} {"\u00B7"} {preSafeCount === preBarrierCount ? (
+            Input: tokens={pre.signature.n} {"\u00B7"} coherence={pre.signature.phi} {"\u00B7"} {preSafeCount === preBarrierCount ? (
               <span className="text-success">PASSED</span>
             ) : (
               <span className="text-danger">BLOCKED</span>
@@ -335,7 +335,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
           </span>
           {post && (
             <span>
-              Output: n={post.signature.n} {"\u00B7"} {"\u03C6"}={post.signature.phi} {"\u00B7"} {postSafeCount === postBarrierCount ? (
+              Output: tokens={post.signature.n} {"\u00B7"} coherence={post.signature.phi} {"\u00B7"} {postSafeCount === postBarrierCount ? (
                 <span className="text-success">VALIDATED</span>
               ) : (
                 <span className="text-danger">FAILED</span>
@@ -350,17 +350,17 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
             <div className="flex flex-wrap gap-x-3 gap-y-0.5">
               {enforcement.timing.thermosolve_ms !== undefined && (
                 <span className="text-accent-light">
-                  Thermosolve: {enforcement.timing.thermosolve_ms}ms
+                  Analysis: {enforcement.timing.thermosolve_ms}ms
                 </span>
               )}
               {enforcement.timing.cbf_ms !== undefined && (
                 <span className="text-accent-light">
-                  CBF: {enforcement.timing.cbf_ms}ms
+                  Safety: {enforcement.timing.cbf_ms}ms
                 </span>
               )}
               {enforcement.timing.agf_lookup_ms !== undefined && (
                 <span className="text-accent-light">
-                  AGF: {enforcement.timing.agf_lookup_ms}ms
+                  Cache: {enforcement.timing.agf_lookup_ms}ms
                 </span>
               )}
               {enforcement.timing.total_enforcement_ms !== undefined && (
@@ -393,7 +393,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
                   </span>
                 ) : (
                   <span className="text-muted">
-                    {(enforcement.timing.total_ms / 2500).toFixed(1)}x (JIT solve + enforcement)
+                    {(enforcement.timing.total_ms / 2500).toFixed(1)}x (fresh inference + validation)
                   </span>
                 )}
                 {enforcement.timing.llm_ms === 0 && (
@@ -406,10 +406,10 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
           </div>
         )}
 
-        {/* TEEP cache line — always visible when available */}
+        {/* Cache line — always visible when available */}
         {post?.teepId && (
           <div className="mt-1 text-accent-light">
-            {"\u2192"} {post.teepId} {"\u00B7"} Response cached to TEEP ledger
+            {"\u2192"} {post.teepId} {"\u00B7"} Response cached to knowledge base
           </div>
         )}
       </div>
@@ -418,9 +418,9 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
       {expanded && (
         <div className="p-3 rounded-lg bg-surface border border-border text-[10px] font-mono space-y-3">
           <div>
-            <div className="text-muted mb-1">{"\u2500\u2500"} INPUT ENFORCEMENT {"\u2500\u2500"}</div>
+            <div className="text-muted mb-1">{"\u2500\u2500"} INPUT VALIDATION {"\u2500\u2500"}</div>
             <div className="text-foreground">
-              words={pre.signature.n} {"\u00B7"} {"\u03C6"}={pre.signature.phi} {"\u00B7"} dS={"\u2264"}0
+              tokens={pre.signature.n} {"\u00B7"} coherence={pre.signature.phi} {"\u00B7"} convergence={"\u2264"}0
             </div>
             <div className="flex flex-wrap gap-1.5 mt-1.5">
               {Object.entries(pre.cbf)
@@ -443,9 +443,9 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
 
           {post && (
             <div>
-              <div className="text-muted mb-1">{"\u2500\u2500"} OUTPUT ENFORCEMENT {"\u2500\u2500"}</div>
+              <div className="text-muted mb-1">{"\u2500\u2500"} OUTPUT VALIDATION {"\u2500\u2500"}</div>
               <div className="text-foreground">
-                words={post.signature.n} {"\u00B7"} {"\u03C6"}={post.signature.phi} {"\u00B7"} dS={"\u2264"}0
+                tokens={post.signature.n} {"\u00B7"} coherence={post.signature.phi} {"\u00B7"} convergence={"\u2264"}0
               </div>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {Object.entries(post.cbf)
@@ -466,7 +466,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
               </div>
               {post.teepId && (
                 <div className="mt-1.5 text-accent-light">
-                  TEEP: {post.teepId} {"\u00B7"} Permanently cached
+                  ID: {post.teepId} {"\u00B7"} Permanently cached
                 </div>
               )}
             </div>
@@ -1556,7 +1556,7 @@ export default function ChatPage() {
                 ? "text-warning border-warning/30 bg-warning/10"
                 : "text-muted border-border hover:border-accent/30 hover:text-accent-light"
             }`}
-            title="SSD-RCI Macro Programs"
+            title="CPUAGEN Macro Programs"
           >
             {"\uD83E\uDDF2"} Macros
           </button>
@@ -1987,7 +1987,7 @@ export default function ChatPage() {
     {macrosOpen && !canvasOpen && (
       <div className="w-56 border-l border-border bg-surface/50 flex flex-col shrink-0 max-md:hidden">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-          <span className="text-[10px] font-mono text-muted uppercase tracking-wider">SSD-RCI Macros</span>
+          <span className="text-[10px] font-mono text-muted uppercase tracking-wider">CPUAGEN Macros</span>
           <button
             onClick={() => setMacrosOpen(false)}
             className="text-muted hover:text-foreground text-xs cursor-pointer"
@@ -2013,7 +2013,7 @@ export default function ChatPage() {
         </div>
         <div className="px-3 py-2 border-t border-border">
           <p className="text-[9px] text-muted/60 leading-tight">
-            Click a macro to prepend it to your message. Macros trigger specialized SSD-RCI cognitive pipelines.
+            Click a macro to prepend it to your message. Macros trigger specialized CPUAGEN processing pipelines.
           </p>
         </div>
       </div>

@@ -400,7 +400,7 @@ export default function MemoryPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-surface border border-border rounded-lg p-3 text-center">
                 <div className="text-lg font-bold font-mono text-accent-light">{knowledge.teepCount}</div>
-                <div className="text-[10px] text-muted font-mono uppercase">TEEPs Loaded</div>
+                <div className="text-[10px] text-muted font-mono uppercase">Cached Entries</div>
               </div>
               <div className="bg-surface border border-border rounded-lg p-3 text-center">
                 <div className="text-lg font-bold font-mono text-success">{knowledge.hitRate}%</div>
@@ -408,11 +408,11 @@ export default function MemoryPage() {
               </div>
               <div className="bg-surface border border-border rounded-lg p-3 text-center">
                 <div className="text-lg font-bold font-mono text-warning">{(knowledge.morphicFieldStrength ?? 0).toFixed(3)}</div>
-                <div className="text-[10px] text-muted font-mono uppercase">Morphic Field</div>
+                <div className="text-[10px] text-muted font-mono uppercase">Knowledge Density</div>
               </div>
               <div className="bg-surface border border-border rounded-lg p-3 text-center">
                 <div className="text-lg font-bold font-mono text-accent-light">{knowledge.totalResonanceEvents}</div>
-                <div className="text-[10px] text-muted font-mono uppercase">Resonance Events</div>
+                <div className="text-[10px] text-muted font-mono uppercase">Convergence Events</div>
               </div>
             </div>
 
@@ -435,7 +435,7 @@ export default function MemoryPage() {
                   <div className="text-lg font-bold font-mono text-accent-light">
                     {engineMetrics.ricci ? (engineMetrics.ricci.scalar ?? 0).toFixed(4) : "—"}
                   </div>
-                  <div className="text-[10px] text-muted font-mono uppercase">Ricci Curvature</div>
+                  <div className="text-[10px] text-muted font-mono uppercase">Solution Complexity</div>
                 </div>
               </div>
             )}
@@ -445,11 +445,11 @@ export default function MemoryPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {engineMetrics.manifold && (
                   <div className="bg-surface border border-border rounded-lg p-3">
-                    <div className="text-[10px] font-mono text-muted uppercase mb-2">Manifold Coverage</div>
+                    <div className="text-[10px] font-mono text-muted uppercase mb-2">Knowledge Coverage</div>
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div>
                         <div className="text-sm font-mono font-bold text-accent-light">{engineMetrics.manifold.coveredBasins}</div>
-                        <div className="text-[9px] text-muted">Basins</div>
+                        <div className="text-[9px] text-muted">Regions</div>
                       </div>
                       <div>
                         <div className="text-sm font-mono font-bold text-warning">{engineMetrics.manifold.frontierSize}</div>
@@ -464,7 +464,7 @@ export default function MemoryPage() {
                 )}
                 {engineMetrics.fisher && (
                   <div className="bg-surface border border-border rounded-lg p-3">
-                    <div className="text-[10px] font-mono text-muted uppercase mb-2">Fisher Geometry</div>
+                    <div className="text-[10px] font-mono text-muted uppercase mb-2">Adaptive Weights</div>
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs font-mono">
                         <span className="text-muted">Coherence</span>
@@ -506,20 +506,20 @@ export default function MemoryPage() {
 
             <div className="bg-surface/50 border border-border rounded-lg p-4">
               <p className="text-xs text-muted leading-relaxed">
-                The Knowledge Base shows the SSD-RCI enforcement engine&apos;s learned state.
-                Every query is solved into a thermodynamic basin state (TEEP) and cached.
-                The enforcement pipeline validates all requests through 9 Control Barrier Functions.
-                The morphic field strengthens as the system accumulates resonance events.
+                The Knowledge Base shows the CPUAGEN engine&apos;s learned state.
+                Every query is analyzed, validated, and cached as a reusable knowledge entry.
+                The enforcement pipeline validates all requests through 9 independent safety barriers.
+                Knowledge density increases as the system accumulates validated responses.
               </p>
             </div>
 
             {/* TEEP list */}
             <div>
-              <h3 className="text-sm font-medium mb-3">Top TEEPs by Semantic Mass</h3>
+              <h3 className="text-sm font-medium mb-3">Top Entries by Relevance</h3>
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search TEEPs by content or ID..."
+                placeholder="Search knowledge base by content or ID..."
                 className="w-full px-3 py-2 mb-3 bg-surface border border-border rounded-lg text-sm text-foreground placeholder:text-muted focus:border-accent/50 focus:outline-none"
               />
               <div className="space-y-2">
@@ -529,7 +529,7 @@ export default function MemoryPage() {
                       <span className={`w-2 h-2 rounded-full ${t.allSafe ? "bg-success" : "bg-danger"}`} />
                       <span className="text-[10px] font-mono text-accent-light">{t.id}</span>
                       <span className="text-[10px] font-mono text-muted ml-auto">
-                        mass: {(t.semanticMass ?? 0).toFixed(2)} | {t.hits} hits | resonance: {(t.resonanceStrength ?? 0).toFixed(3)}
+                        weight: {(t.semanticMass ?? 0).toFixed(2)} | {t.hits} hits | confidence: {(t.resonanceStrength ?? 0).toFixed(3)}
                       </span>
                     </div>
                     <p className="text-xs text-foreground">{t.content.slice(0, 200)}{t.content.length > 200 ? "..." : ""}</p>
@@ -542,8 +542,8 @@ export default function MemoryPage() {
                 {knowledge.teeps.length === 0 && (
                   <div className="text-center py-8 text-muted max-w-sm mx-auto">
                     <p className="text-2xl mb-2">{"\u{1F4DA}"}</p>
-                    <p className="font-medium text-foreground text-sm mb-1">No TEEPs Cached Yet</p>
-                    <p className="text-xs mb-2">TEEPs (Thermosolve-Enforced Entry Points) are knowledge units the AI builds as you chat.</p>
+                    <p className="font-medium text-foreground text-sm mb-1">No Knowledge Entries Yet</p>
+                    <p className="text-xs mb-2">Knowledge entries are validated response units the AI builds as you chat.</p>
                     <p className="text-[10px]">Start a conversation in <strong>Chat</strong> — the knowledge base grows automatically.</p>
                   </div>
                 )}

@@ -33,6 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { href: "/app/workspace", label: "Workspace", icon: "\u{1F4C1}", active: pathname?.startsWith("/app/workspace") },
     { href: "/app/code", label: "Code", icon: "\u{1F4BB}", active: pathname?.startsWith("/app/code") },
     { href: "/app/dual", label: "Dual", icon: "\u{1F91D}", active: pathname?.startsWith("/app/dual") },
+    { href: "/app/consensus", label: "Consensus", icon: "\u{1F3AF}", active: pathname?.startsWith("/app/consensus") },
     { href: "/app/cowork", label: "Cowork", icon: "\u{1F9D1}\u200D\u{1F4BB}", active: pathname?.startsWith("/app/cowork") },
     { href: "/app/automate", label: "Automate", icon: "\u{1F916}", active: pathname?.startsWith("/app/automate") },
     { href: "/app/agent", label: "Agent Loop", icon: "\u{1F504}", active: pathname?.startsWith("/app/agent") },

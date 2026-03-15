@@ -310,7 +310,7 @@ export default function AgentPage() {
         {enforcement && (
           <div className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-[10px] font-mono border ${enforcement.allSafe ? "border-green-500/20 bg-green-950/20" : "border-red-500/30 bg-red-950/30"}`}>
             <span className={enforcement.allSafe ? "text-green-400" : "text-red-400"}>
-              {enforcement.allSafe ? "\u2713" : "\u2717"} CBF {enforcement.safeCount}/{enforcement.barrierCount}
+              {enforcement.allSafe ? "\u2713" : "\u2717"} Safety {enforcement.safeCount}/{enforcement.barrierCount}
             </span>
           </div>
         )}

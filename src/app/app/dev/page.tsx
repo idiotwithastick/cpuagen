@@ -335,7 +335,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
         {/* TEEP cache line — always visible when available */}
         {post?.teepId && (
           <div className="mt-1 text-accent-light">
-            {"\u2192"} {post.teepId} {"\u00B7"} Response cached to TEEP ledger
+            {"\u2192"} {post.teepId} {"\u00B7"} Response cached to knowledge base
           </div>
         )}
       </div>
@@ -392,7 +392,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
               </div>
               {post.teepId && (
                 <div className="mt-1.5 text-accent-light">
-                  TEEP: {post.teepId} {"\u00B7"} Permanently cached
+                  ID: {post.teepId} {"\u00B7"} Permanently cached
                 </div>
               )}
             </div>
@@ -557,13 +557,13 @@ const EXAMPLE_PROMPTS = [
   { label: "CPUAGEN vs raw AI", prompt: "What's the difference between a CPUAGEN-enforced response and a raw LLM response? Why should I care?" },
   { label: "What is SSD-RCI?", prompt: "What is SSD-RCI and how does it relate to CPUAGEN? Are they the same thing?" },
   { label: "Hallucination prevention", prompt: "How does CPUAGEN prevent AI hallucinations? What's different about physics-based validation vs prompt engineering?" },
-  { label: "TEEP caching", prompt: "What is TEEP caching in CPUAGEN? How does it make responses faster and more reliable?" },
-  { label: "Thermosolve signatures", prompt: "What are thermosolve signatures and why does every CPUAGEN response have one?" },
+  { label: "Knowledge caching", prompt: "What is knowledge caching in CPUAGEN? How does it make responses faster and more reliable?" },
+  { label: "Validation signatures", prompt: "What are validation signatures and why does every CPUAGEN response have one?" },
   { label: "Multi-model support", prompt: "Which AI models does CPUAGEN support? Can I use Claude, GPT, and Gemini through the same enforcement layer?" },
   { label: "Physics-based AI", prompt: "What does 'physics-based AI enforcement' mean? How is CPUAGEN using physics to validate AI responses?" },
   { label: "Validation pipeline", prompt: "Walk me through the full CPUAGEN validation pipeline from the moment I type a message to when I see the response." },
   { label: "Why enforcement matters", prompt: "Why does AI enforcement matter? What problems does CPUAGEN solve that other AI platforms don't?" },
-  { label: "Knowledge caching", prompt: "How does CPUAGEN's TEEP system work? What does it mean that basin states compound over time?" },
+  { label: "Compound knowledge", prompt: "How does CPUAGEN's knowledge system work? What does it mean that cached solutions compound over time?" },
   { label: "Pre vs post validation", prompt: "What's the difference between pre-validation and post-validation in CPUAGEN? Why validate both input AND output?" },
   { label: "Barrier failures", prompt: "What happens when one of CPUAGEN's safety barriers fails? Does the response get blocked entirely?" },
   { label: "Who built CPUAGEN?", prompt: "Who created CPUAGEN and what's the vision behind it? What problem was it originally designed to solve?" },

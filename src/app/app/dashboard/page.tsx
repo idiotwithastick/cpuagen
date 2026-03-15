@@ -167,8 +167,8 @@ export default function DashboardPage() {
           <p className="text-danger text-sm font-medium mb-1">Engine State Unavailable</p>
           <p className="text-xs text-muted mb-3">{error || "The physics engine hasn\u0027t responded yet."}</p>
           <p className="text-[10px] text-muted/70 mb-4">
-            The Dashboard shows real-time metrics from the SSD-RCI engine —
-            entropy, coherence, Fisher weights, TEEPs, and more.
+            The Dashboard shows real-time metrics from the CPUAGEN engine —
+            validation scores, adaptive weights, knowledge cache, and more.
             It updates automatically once the engine is running.
           </p>
           <button onClick={fetchSnapshot} className="px-4 py-2 text-xs bg-accent/10 text-accent-light rounded-lg hover:bg-accent/20">
@@ -195,9 +195,9 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="px-6 py-4 border-b border-border flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">SSD-RCI Engine Dashboard</h1>
+          <h1 className="text-xl font-semibold">CPUAGEN Engine Dashboard</h1>
           <p className="text-xs text-muted mt-0.5">
-            v{snapshot.version} | Cycle {psi.cycle} | {teeps.length} TEEPs loaded | {new Date(snapshot.timestamp).toLocaleTimeString()}
+            v{snapshot.version} | Cycle {psi.cycle} | {teeps.length} cached entries | {new Date(snapshot.timestamp).toLocaleTimeString()}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -232,7 +232,7 @@ export default function DashboardPage() {
                 : "text-muted hover:text-foreground hover:bg-surface-light"
             }`}
           >
-            {t === "overview" ? "Overview" : t === "teeps" ? `TEEPs (${teeps.length})` : t === "search" ? "\uD83D\uDD0D Search" : t === "fisher" ? "Fisher Metric" : t === "psi" ? "PsiState" : t === "manifold" ? "Manifold" : t === "geometry" ? "Geometry" : t === "enforcement" ? "Enforcement" : "Lab"}
+            {t === "overview" ? "Overview" : t === "teeps" ? `Knowledge (${teeps.length})` : t === "search" ? "\uD83D\uDD0D Search" : t === "fisher" ? "Adaptive Weights" : t === "psi" ? "Engine State" : t === "manifold" ? "Coverage" : t === "geometry" ? "Geometry" : t === "enforcement" ? "Validation" : "Lab"}
           </button>
         ))}
       </div>
@@ -245,36 +245,36 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               <StatCard label="Cycle" value={psi.cycle} color="text-accent-light" />
               <StatCard label="Cache Hit Rate" value={`${hitRate}%`} sub={`${counters.cacheHits}/${totalCacheOps}`} color="text-success" />
-              <StatCard label="AGF Full Hits" value={counters.agfFullHits} color="text-success" />
-              <StatCard label="AGF Basin Hits" value={counters.agfBasinHits} color="text-warning" />
-              <StatCard label="JIT Solves" value={counters.agfJitSolves} color="text-accent-light" />
-              <StatCard label="API Calls Avoided" value={counters.agfApiCallsAvoided} color="text-success" />
+              <StatCard label="Cache Hits" value={counters.agfFullHits} color="text-success" />
+              <StatCard label="Near Matches" value={counters.agfBasinHits} color="text-warning" />
+              <StatCard label="Fresh Inferences" value={counters.agfJitSolves} color="text-accent-light" />
+              <StatCard label="API Calls Saved" value={counters.agfApiCallsAvoided} color="text-success" />
             </div>
 
             {/* Core metrics */}
             <div>
-              <h2 className="text-sm font-medium mb-3">Core Thermodynamic State</h2>
+              <h2 className="text-sm font-medium mb-3">Core Engine State</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <Gauge label="Entropy (S)" value={psi.S} max={10} color="text-accent-light" />
+                <Gauge label="Information Score" value={psi.S} max={10} color="text-accent-light" />
                 <Gauge label="Coherence" value={psi.psi_coherence} max={1} color="text-success" />
-                <Gauge label="Truth (I_truth)" value={psi.I_truth} max={1} color="text-warning" />
-                <Gauge label="Curvature (R)" value={psi.R_curv} max={5} color="text-accent-light" />
+                <Gauge label="Truth Score" value={psi.I_truth} max={1} color="text-warning" />
+                <Gauge label="Complexity" value={psi.R_curv} max={5} color="text-accent-light" />
                 <Gauge label="Semantic Delta" value={psi.delta_H_sem} max={1} color="text-danger" />
-                <Gauge label="Phase (phi)" value={psi.phi_phase} max={6.283} color="text-success" />
-                <Gauge label="Beta_T" value={psi.beta_T} max={2} color="text-warning" />
-                <Gauge label="Flow (lambda)" value={psi.lambda_flow} max={1} color="text-accent-light" />
-                <Gauge label="Noise (sigma)" value={psi.sigma_noise} max={1} color="text-muted" />
+                <Gauge label="Phase Alignment" value={psi.phi_phase} max={6.283} color="text-success" />
+                <Gauge label="Balance" value={psi.beta_T} max={2} color="text-warning" />
+                <Gauge label="Flow Rate" value={psi.lambda_flow} max={1} color="text-accent-light" />
+                <Gauge label="Noise Level" value={psi.sigma_noise} max={1} color="text-muted" />
               </div>
             </div>
 
             {/* Morphic field */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-surface border border-border rounded-lg p-4">
-                <div className="text-[10px] text-muted font-mono uppercase mb-1">Morphic Field Strength</div>
+                <div className="text-[10px] text-muted font-mono uppercase mb-1">Knowledge Density</div>
                 <div className="text-2xl font-bold font-mono text-accent-light">{(snapshot.morphicFieldStrength ?? 0).toFixed(4)}</div>
               </div>
               <div className="bg-surface border border-border rounded-lg p-4">
-                <div className="text-[10px] text-muted font-mono uppercase mb-1">Total Resonance Events</div>
+                <div className="text-[10px] text-muted font-mono uppercase mb-1">Total Convergence Events</div>
                 <div className="text-2xl font-bold font-mono text-warning">{snapshot.totalResonanceEvents}</div>
               </div>
             </div>
@@ -282,7 +282,7 @@ export default function DashboardPage() {
             {/* Top TEEPs preview */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium">Top TEEPs by Semantic Mass</h2>
+                <h2 className="text-sm font-medium">Top Cached Entries by Relevance</h2>
                 <button onClick={() => setTab("teeps")} className="text-[10px] text-accent-light hover:underline">
                   View all
                 </button>
@@ -312,7 +312,7 @@ export default function DashboardPage() {
             <input
               value={teepFilter}
               onChange={(e) => setTeepFilter(e.target.value)}
-              placeholder="Search TEEPs by ID or content..."
+              placeholder="Search knowledge cache by ID or content..."
               className="w-full px-4 py-2 bg-surface border border-border rounded-lg text-sm text-foreground placeholder:text-muted focus:border-accent/50 focus:outline-none font-mono"
             />
 
@@ -330,18 +330,18 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <div className={`w-2 h-2 rounded-full ${t.allSafe ? "bg-success" : "bg-danger"}`} />
                       <span className="text-[10px] font-mono text-accent-light">{t.id}</span>
-                      <span className="text-[10px] font-mono text-muted ml-auto">mass: {(t.semanticMass ?? 0).toFixed(2)}</span>
+                      <span className="text-[10px] font-mono text-muted ml-auto">weight: {(t.semanticMass ?? 0).toFixed(2)}</span>
                     </div>
                     <p className="text-xs text-foreground truncate">{t.content.slice(0, 120)}</p>
                     <div className="flex gap-3 mt-1.5 text-[9px] text-muted font-mono">
                       <span>{t.hits} hits</span>
-                      <span>resonance: {(t.resonanceStrength ?? 0).toFixed(3)}</span>
+                      <span>confidence: {(t.resonanceStrength ?? 0).toFixed(3)}</span>
                       <span>{new Date(t.created).toLocaleString()}</span>
                     </div>
                   </div>
                 ))}
                 {filteredTeeps.length === 0 && (
-                  <p className="text-center text-sm text-muted py-8">No TEEPs match filter</p>
+                  <p className="text-center text-sm text-muted py-8">No entries match filter</p>
                 )}
               </div>
 
@@ -362,7 +362,7 @@ export default function DashboardPage() {
                     <div>
                       <span className="text-[10px] text-muted font-mono uppercase block mb-1">Status</span>
                       <span className={`text-xs px-2 py-0.5 rounded ${selectedTeep.allSafe ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
-                        {selectedTeep.allSafe ? "ALL CBF SAFE" : "CBF VIOLATION"}
+                        {selectedTeep.allSafe ? "ALL CHECKS PASSED" : "VALIDATION FAILED"}
                       </span>
                     </div>
 
@@ -375,7 +375,7 @@ export default function DashboardPage() {
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <span className="text-[10px] text-muted font-mono uppercase block mb-0.5">Semantic Mass</span>
+                        <span className="text-[10px] text-muted font-mono uppercase block mb-0.5">Relevance Weight</span>
                         <span className="text-sm font-bold font-mono text-accent-light">{(selectedTeep.semanticMass ?? 0).toFixed(4)}</span>
                       </div>
                       <div>
@@ -419,11 +419,11 @@ export default function DashboardPage() {
         {tab === "search" && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-2">
-              <h2 className="text-lg font-semibold text-foreground">TEEP Knowledge Explorer</h2>
+              <h2 className="text-lg font-semibold text-foreground">Knowledge Explorer</h2>
               <span className="text-[10px] font-mono text-muted bg-surface-light px-2 py-0.5 rounded">Semantic Search</span>
             </div>
             <p className="text-xs text-muted">
-              Search the TEEP ledger by semantic meaning. Your query is thermosolve-encoded and compared against all cached basin states using Fisher geodesic distance.
+              Search the knowledge base by semantic meaning. Your query is analyzed and compared against all cached validated responses using adaptive distance metrics.
             </p>
             <form
               onSubmit={async (e) => {
@@ -452,7 +452,7 @@ export default function DashboardPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search TEEPs by meaning... (e.g., 'thermodynamic entropy', 'neural network', 'code optimization')"
+                placeholder="Search knowledge base by meaning... (e.g., 'machine learning', 'neural network', 'code optimization')"
                 className="flex-1 px-4 py-2.5 rounded-lg bg-surface border border-border text-foreground placeholder:text-muted/50 font-mono text-sm focus:outline-none focus:border-accent/50 transition-colors"
               />
               <button
@@ -506,7 +506,7 @@ export default function DashboardPage() {
 
             {searchSig && searchResults.length === 0 && !searching && (
               <div className="text-center py-8 text-muted text-sm">
-                No TEEPs found within semantic distance threshold. Try a broader query.
+                No results found within similarity threshold. Try a broader query.
               </div>
             )}
           </div>
@@ -514,10 +514,10 @@ export default function DashboardPage() {
 
         {tab === "fisher" && (
           <div className="space-y-4">
-            <h2 className="text-sm font-medium">Fisher Information Metric Weights</h2>
+            <h2 className="text-sm font-medium">Adaptive Validation Weights</h2>
             <p className="text-xs text-muted">
-              The Fisher metric g_F(psi) determines the natural geometry of the state manifold.
-              Higher weights indicate dimensions with more curvature — the system is more sensitive to changes along these axes.
+              These weights determine how the engine prioritizes different dimensions of meaning.
+              Higher weights indicate dimensions the system is more sensitive to — they self-tune as more queries are processed.
             </p>
             <div className="space-y-2">
               {fisherEntries.map(([key, val]) => {
@@ -539,7 +539,7 @@ export default function DashboardPage() {
                 );
               })}
               {fisherEntries.length === 0 && (
-                <p className="text-center text-sm text-muted py-8">No Fisher weights available</p>
+                <p className="text-center text-sm text-muted py-8">No adaptive weights available</p>
               )}
             </div>
           </div>
@@ -547,10 +547,10 @@ export default function DashboardPage() {
 
         {tab === "psi" && (
           <div className="space-y-4">
-            <h2 className="text-sm font-medium">Full 26-Dimensional PsiState</h2>
+            <h2 className="text-sm font-medium">Full Engine State Vector</h2>
             <p className="text-xs text-muted">
-              The complete thermodynamic state vector. Each dimension corresponds to a physical quantity
-              in the SSD-RCI Riemannian manifold.
+              The complete engine state. Each dimension tracks a different aspect of
+              the validation and knowledge system.
             </p>
 
             <div className="bg-surface border border-border rounded-lg overflow-hidden">
@@ -564,22 +564,22 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {[
-                    ["cycle", psi.cycle, "Evolution cycle counter"],
-                    ["S", psi.S, "Total entropy"],
-                    ["delta_H_sem", psi.delta_H_sem, "Semantic enthalpy change"],
-                    ["S_CTS", psi.S_CTS, "Cross-talk suppression entropy"],
-                    ["psi_coherence", psi.psi_coherence, "Wavefunction coherence"],
-                    ["phi_phase", psi.phi_phase, "Phase angle (IIT phi)"],
-                    ["I_truth", psi.I_truth, "Truth information content"],
-                    ["E_meta", psi.E_meta, "Meta-cognitive energy"],
-                    ["R_curv", psi.R_curv, "Ricci curvature scalar"],
-                    ["lambda_flow", psi.lambda_flow, "Flow coupling constant"],
-                    ["beta_T", psi.beta_T, "Inverse temperature"],
-                    ["kappa", psi.kappa, "Coupling strength"],
-                    ["sigma_noise", psi.sigma_noise, "Noise amplitude"],
-                    ["alpha", psi.alpha, "Learning rate / adaptation"],
-                    ["delta_S_adaptation", psi.delta_S_adaptation, "Entropy adaptation rate"],
-                    ["time", psi.time, "Simulation time"],
+                    ["cycle", psi.cycle, "Processing cycle counter"],
+                    ["info_score", psi.S, "Information content score"],
+                    ["semantic_delta", psi.delta_H_sem, "Semantic change rate"],
+                    ["isolation", psi.S_CTS, "Cross-talk suppression"],
+                    ["coherence", psi.psi_coherence, "Response coherence"],
+                    ["phase", psi.phi_phase, "Phase alignment"],
+                    ["truth", psi.I_truth, "Truth confidence"],
+                    ["complexity", psi.E_meta, "Cognitive complexity"],
+                    ["curvature", psi.R_curv, "Solution space complexity"],
+                    ["flow", psi.lambda_flow, "Processing flow rate"],
+                    ["balance", psi.beta_T, "System balance"],
+                    ["coupling", psi.kappa, "Inter-dimension coupling"],
+                    ["noise", psi.sigma_noise, "Noise level"],
+                    ["learning_rate", psi.alpha, "Adaptation rate"],
+                    ["adaptation", psi.delta_S_adaptation, "Adaptive correction rate"],
+                    ["time", psi.time, "Engine uptime"],
                   ].map(([dim, val, desc]) => (
                     <tr key={dim as string} className="border-b border-border/50 hover:bg-surface-light/30">
                       <td className="px-4 py-2 font-mono text-accent-light">{dim as string}</td>
@@ -943,8 +943,8 @@ export default function DashboardPage() {
           <div className="space-y-6">
             <h2 className="text-sm font-medium">Enforcement Metrics</h2>
             <p className="text-xs text-muted">
-              Live metrics from the SSD-RCI enforcement engine — cache performance, AGF protocol efficiency,
-              morphic resonance field, holographic spatial index, and Semantic Cannon activity.
+              Live metrics from the CPUAGEN validation engine — cache performance, lookup efficiency,
+              knowledge density, spatial indexing, and inference acceleration activity.
             </p>
 
             {engineData?.metrics ? (
@@ -952,8 +952,8 @@ export default function DashboardPage() {
                 {/* Core engine info */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <StatCard label="Engine Version" value={`v${engineData.metrics.version}`} color="text-accent-light" />
-                  <StatCard label="TEEP Ledger" value={engineData.metrics.teepLedgerSize} color="text-accent-light" />
-                  <StatCard label="Basin Index" value={engineData.metrics.basinIndexSize} color="text-warning" />
+                  <StatCard label="Knowledge Cache" value={engineData.metrics.teepLedgerSize} color="text-accent-light" />
+                  <StatCard label="Solution Index" value={engineData.metrics.basinIndexSize} color="text-warning" />
                   <StatCard label="Spatial Grid" value={engineData.metrics.spatialGridCells} color="text-muted" />
                 </div>
 
@@ -1177,17 +1177,17 @@ export default function DashboardPage() {
                     </label>
                   </div>
                   <p className="text-[9px] text-muted/60 mt-2">
-                    Export saves PsiState, Fisher weights, morphic field, and top 100 TEEPs as JSON.
+                    Export saves engine state, adaptive weights, knowledge density, and top 100 cached entries as JSON.
                     Import restores a previously exported state.
                   </p>
                 </div>
 
                 <div className="bg-surface/50 border border-border rounded-lg p-4">
                   <p className="text-xs text-muted leading-relaxed">
-                    The Enforcement tab shows live operational metrics from the SSD-RCI physics engine.
-                    Cache hits avoid redundant computation. AGF (Anti-Goodhart First) lookups match queries to solved basin states.
-                    The morphic resonance field strengthens as the system accumulates repeated patterns.
-                    Holographic spatial indexing provides O(1) nearest-neighbor TEEP lookup in 5D boundary space.
+                    The Validation tab shows live operational metrics from the CPUAGEN engine.
+                    Cache hits avoid redundant computation. Knowledge lookups match queries to previously validated solutions.
+                    Knowledge density increases as the system accumulates repeated patterns.
+                    Spatial indexing provides instant nearest-neighbor lookup across the knowledge base.
                   </p>
                 </div>
               </>
@@ -1199,11 +1199,11 @@ export default function DashboardPage() {
 
         {tab === "lab" && (
           <div className="space-y-6">
-            <h2 className="text-sm font-medium">Physics Lab — Semantic Cannon</h2>
+            <h2 className="text-sm font-medium">Validation Lab — Inference Pipeline</h2>
             <p className="text-xs text-muted">
-              Enter any text to see the full SSD-RCI physics pipeline: thermosolve signature extraction,
-              Control Barrier Function validation, 3-stage Semantic Cannon (golden-ratio entropy compression),
-              Bekenstein-bounded compression, and holographic boundary encoding.
+              Enter any text to see the full CPUAGEN pipeline: semantic signature extraction,
+              multi-barrier safety validation, 3-stage accelerated inference compression,
+              optimal information compression, and multi-dimensional encoding.
             </p>
 
             {/* Input */}
