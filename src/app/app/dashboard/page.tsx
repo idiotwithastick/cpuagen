@@ -467,7 +467,7 @@ export default function DashboardPage() {
             {searchSig && (
               <div className="p-3 rounded-lg bg-surface border border-border text-[10px] font-mono">
                 <span className="text-muted">Query signature: </span>
-                <span className="text-accent-light">n={searchSig.n} | S={searchSig.S} | dS={searchSig.dS} | {"\u03C6"}={searchSig.phi} | I<sub>t</sub>={searchSig.I_truth} | {"\u03C8"}={searchSig.psi_coherence}</span>
+                <span className="text-accent-light">tokens={searchSig.n} | info={searchSig.S} | conv={searchSig.dS} | coherence={searchSig.phi} | truth={searchSig.I_truth} | quality={searchSig.psi_coherence}</span>
                 <span className="text-muted ml-3">{searchResults.length} result{searchResults.length !== 1 ? "s" : ""}</span>
               </div>
             )}
@@ -494,9 +494,9 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       <div className="text-right text-[9px] font-mono text-muted shrink-0">
-                        <div>S={r.signature.S}</div>
-                        <div>{"\u03C6"}={r.signature.phi}</div>
-                        <div>I<sub>t</sub>={r.signature.I_truth}</div>
+                        <div>info={r.signature.S}</div>
+                        <div>coh={r.signature.phi}</div>
+                        <div>truth={r.signature.I_truth}</div>
                       </div>
                     </div>
                   </div>
@@ -642,10 +642,10 @@ export default function DashboardPage() {
 
         {tab === "manifold" && (
           <div className="space-y-6">
-            <h2 className="text-sm font-medium">Semantic Manifold Coverage</h2>
+            <h2 className="text-sm font-medium">Knowledge Space Coverage</h2>
             <p className="text-xs text-muted">
-              The 5D semantic manifold tracks which regions of knowledge space have been explored.
-              Coverage increases as more unique queries are processed and cached as TEEPs.
+              The knowledge space tracks which regions have been explored.
+              Coverage increases as more unique queries are processed and cached.
             </p>
 
             {engineData?.manifold ? (
@@ -660,7 +660,7 @@ export default function DashboardPage() {
                 {/* Coverage progress bar */}
                 <div className="bg-surface border border-border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-mono text-muted uppercase">Manifold Exploration Progress</span>
+                    <span className="text-[10px] font-mono text-muted uppercase">Knowledge Exploration Progress</span>
                     <span className="text-xs font-mono text-accent-light font-bold">{((engineData.manifold.coverageRatio ?? 0) * 100).toFixed(4)}%</span>
                   </div>
                   <div className="h-3 bg-surface-light rounded-full overflow-hidden">
@@ -670,7 +670,7 @@ export default function DashboardPage() {
                     />
                   </div>
                   <p className="text-[9px] text-muted/60 mt-1">
-                    {engineData.manifold.visitedCells} of {engineData.manifold.totalPossibleCells.toLocaleString()} cells visited in 5D grid
+                    {engineData.manifold.visitedCells} of {engineData.manifold.totalPossibleCells.toLocaleString()} cells visited
                   </p>
                 </div>
 
@@ -692,11 +692,11 @@ export default function DashboardPage() {
                 {engineData.holographic?.points?.length > 0 && (
                   <div className="bg-surface border border-border rounded-lg p-4">
                     <h3 className="text-[10px] font-mono text-muted uppercase mb-2">
-                      Holographic Boundary Projection ({engineData.holographic.points.length} points)
+                      Spatial Projection ({engineData.holographic.points.length} points)
                     </h3>
                     <p className="text-[9px] text-muted/60 mb-3">
-                      12D TEEP signatures projected onto 5D boundary via Fisher-weighted reduction.
-                      Axes: {engineData.holographic.axes?.join(", ") || "S, phi, I_truth, psi_coherence, synergy"}
+                      Multi-dimensional signatures projected onto boundary representation.
+                      Axes: {engineData.holographic.axes?.join(", ") || "info, coherence, truth, quality, synergy"}
                     </p>
                     {/* 2D Scatter projection */}
                     {(() => {
@@ -728,7 +728,7 @@ export default function DashboardPage() {
                                   opacity,
                                   transform: "translate(-50%, -50%)",
                                 }}
-                                title={`${pt.id || `#${i+1}`} — mass: ${(pt.mass ?? 0).toFixed(2)}`}
+                                title={`${pt.id || `#${i+1}`} — weight: ${(pt.mass ?? 0).toFixed(2)}`}
                               />
                             );
                           })}
@@ -748,7 +748,7 @@ export default function DashboardPage() {
                               {(engineData.holographic.axes || ["d0", "d1", "d2", "d3", "d4"]).map((a: string) => (
                                 <th key={a} className="text-right px-2 py-1 text-muted">{a}</th>
                               ))}
-                              <th className="text-right px-2 py-1 text-muted">Mass</th>
+                              <th className="text-right px-2 py-1 text-muted">Weight</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -784,8 +784,8 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <p className="text-[9px] text-muted/60 mt-2">
-                    Each query through the Physics Lab records a trajectory point on the manifold.
-                    Coverage increases as new grid cells are visited. Persistence commits state to D1 when thresholds are met.
+                    Each query through the Validation Lab records a trajectory point.
+                    Coverage increases as new grid cells are visited. State is committed when thresholds are met.
                   </p>
                 </div>
               </>
@@ -797,10 +797,10 @@ export default function DashboardPage() {
 
         {tab === "geometry" && (
           <div className="space-y-6">
-            <h2 className="text-sm font-medium">Riemannian Geometry</h2>
+            <h2 className="text-sm font-medium">Solution Geometry</h2>
             <p className="text-xs text-muted">
-              Ricci curvature of the semantic manifold and quantum Fisher coherence matrix.
-              High curvature indicates dense knowledge regions; off-diagonal Fisher elements indicate correlated dimensions.
+              Solution space curvature and adaptive weight correlations.
+              High curvature indicates dense knowledge regions; off-diagonal elements indicate correlated validation dimensions.
             </p>
 
             {engineData?.ricci ? (
@@ -809,14 +809,14 @@ export default function DashboardPage() {
                   <StatCard label="Total Cells" value={engineData.ricci.totalCells} color="text-accent-light" />
                   <StatCard label="Max Curvature" value={(engineData.ricci.maxCurvature ?? 0).toFixed(4)} color="text-success" />
                   <StatCard label="Avg Curvature" value={(engineData.ricci.avgCurvature ?? 0).toFixed(4)} color="text-warning" />
-                  <StatCard label="Off-Diag Fisher" value={engineData.fisher?.offDiagonalStrength?.toFixed(4) || "0"} color="text-accent-light" />
+                  <StatCard label="Off-Diag Weight" value={engineData.fisher?.offDiagonalStrength?.toFixed(4) || "0"} color="text-accent-light" />
                 </div>
 
                 {/* Ricci curvature cells */}
                 {engineData.ricci.cells.length > 0 && (
                   <div className="bg-surface border border-border rounded-lg p-4">
                     <h3 className="text-[10px] font-mono text-muted uppercase mb-2">
-                      Top Ricci Curvature Cells ({engineData.ricci.cells.length})
+                      Top Curvature Cells ({engineData.ricci.cells.length})
                     </h3>
                     <div className="space-y-2">
                       {engineData.ricci.cells.slice(0, 15).map((cell: { key: string; teepCount: number; totalMass: number; avgSynergy: number; ricciCurvature: number }, i: number) => {
@@ -827,8 +827,8 @@ export default function DashboardPage() {
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-[10px] font-mono text-muted">[{cell.key}]</span>
                               <div className="flex gap-3 text-[9px] font-mono">
-                                <span className="text-muted">{cell.teepCount} TEEPs</span>
-                                <span className="text-warning">mass={(cell.totalMass ?? 0).toFixed(1)}</span>
+                                <span className="text-muted">{cell.teepCount} entries</span>
+                                <span className="text-warning">weight={(cell.totalMass ?? 0).toFixed(1)}</span>
                                 <span className="text-success">R={(cell.ricciCurvature ?? 0).toFixed(4)}</span>
                               </div>
                             </div>
@@ -849,10 +849,10 @@ export default function DashboardPage() {
                 {engineData.fisher?.matrix?.length > 0 && (
                   <div className="bg-surface border border-border rounded-lg p-4">
                     <h3 className="text-[10px] font-mono text-muted uppercase mb-2">
-                      Fisher Information Matrix ({engineData.fisher.matrix.length}x{engineData.fisher.matrix.length})
+                      Adaptive Weight Matrix ({engineData.fisher.matrix.length}x{engineData.fisher.matrix.length})
                     </h3>
                     <p className="text-[9px] text-muted/60 mb-3">
-                      Heatmap of the quantum Fisher information matrix g_F(psi). Diagonal = dimension variance. Off-diagonal = coupling strength.
+                      Heatmap of adaptive validation weight matrix. Diagonal = dimension variance. Off-diagonal = coupling strength.
                     </p>
                     {(() => {
                       const dims = ["S", "phi", "I_truth", "nat", "beta_T", "coh", "syn"];
@@ -905,10 +905,10 @@ export default function DashboardPage() {
                 {/* Fisher correlations */}
                 {engineData.fisher?.topCorrelations?.length > 0 && (
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Top Fisher Metric Correlations</h3>
+                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Top Adaptive Weight Correlations</h3>
                     <p className="text-[9px] text-muted/60 mb-3">
-                      Off-diagonal elements of the quantum Fisher information matrix.
-                      Strong correlations indicate coupled thermodynamic dimensions.
+                      Off-diagonal elements of the adaptive weight matrix.
+                      Strong correlations indicate coupled validation dimensions.
                     </p>
                     <div className="space-y-2">
                       {engineData.fisher.topCorrelations.slice(0, 8).map((c: { dims: [string, string]; value: number }, i: number) => (
@@ -930,11 +930,11 @@ export default function DashboardPage() {
                 )}
 
                 {engineData.ricci.cells.length === 0 && engineData.fisher?.topCorrelations?.length === 0 && (
-                  <p className="text-center text-sm text-muted py-8">No geometry data yet — process queries to populate the manifold</p>
+                  <p className="text-center text-sm text-muted py-8">No geometry data yet — process queries to populate the solution space</p>
                 )}
               </>
             ) : (
-              <p className="text-center text-sm text-muted py-8">Loading geometry data...</p>
+              <p className="text-center text-sm text-muted py-8">Loading solution data...</p>
             )}
           </div>
         )}
@@ -981,7 +981,7 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <div className="text-[10px] font-mono text-muted uppercase mb-3">AGF Protocol</div>
+                    <div className="text-[10px] font-mono text-muted uppercase mb-3">Lookup Protocol</div>
                     <div className="grid grid-cols-2 gap-2 text-center">
                       <div>
                         <div className="text-lg font-bold font-mono text-success">{engineData.metrics.agf?.fullHits ?? 0}</div>
@@ -989,11 +989,11 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <div className="text-lg font-bold font-mono text-warning">{engineData.metrics.agf?.basinHits ?? 0}</div>
-                        <div className="text-[9px] text-muted">Basin Hits</div>
+                        <div className="text-[9px] text-muted">Near Matches</div>
                       </div>
                       <div>
                         <div className="text-lg font-bold font-mono text-accent-light">{engineData.metrics.agf?.jitSolves ?? 0}</div>
-                        <div className="text-[9px] text-muted">JIT Solves</div>
+                        <div className="text-[9px] text-muted">Fresh Inferences</div>
                       </div>
                       <div>
                         <div className="text-lg font-bold font-mono text-success">{engineData.metrics.agf?.apiCallsAvoided ?? 0}</div>
@@ -1001,7 +1001,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="mt-2 text-[10px] font-mono text-center text-muted">
-                      AGF hit rate: <span className="text-accent-light">{((engineData.metrics.agf?.hitRate ?? 0) * 100).toFixed(1)}%</span>
+                      Lookup hit rate: <span className="text-accent-light">{((engineData.metrics.agf?.hitRate ?? 0) * 100).toFixed(1)}%</span>
                       {" | "}{engineData.metrics.agf?.totalLookups ?? 0} total lookups
                     </div>
                   </div>
@@ -1010,7 +1010,7 @@ export default function DashboardPage() {
                 {/* Morphic resonance */}
                 {engineData.metrics.morphic && (
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <div className="text-[10px] font-mono text-muted uppercase mb-3">Morphic Resonance Field</div>
+                    <div className="text-[10px] font-mono text-muted uppercase mb-3">Knowledge Density Metrics</div>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
                       <div>
                         <div className="text-sm font-bold font-mono text-accent-light">{(engineData.metrics.morphic.fieldStrength ?? 0).toFixed(4)}</div>
@@ -1022,7 +1022,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <div className="text-sm font-bold font-mono text-success">{(engineData.metrics.morphic.basinThreshold ?? 0).toFixed(4)}</div>
-                        <div className="text-[9px] text-muted">Basin Threshold</div>
+                        <div className="text-[9px] text-muted">Match Threshold</div>
                       </div>
                       <div>
                         <div className="text-sm font-bold font-mono text-accent-light">{(engineData.metrics.morphic.totalSemanticMass ?? 0).toFixed(2)}</div>
@@ -1030,7 +1030,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <div className="text-sm font-bold font-mono text-warning">{(engineData.metrics.morphic.heaviestTeepMass ?? 0).toFixed(4)}</div>
-                        <div className="text-[9px] text-muted">Heaviest TEEP</div>
+                        <div className="text-[9px] text-muted">Heaviest Entry</div>
                       </div>
                     </div>
                   </div>
@@ -1039,7 +1039,7 @@ export default function DashboardPage() {
                 {/* Holographic spatial index */}
                 {engineData.metrics.holographic && (
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <div className="text-[10px] font-mono text-muted uppercase mb-3">Holographic Spatial Index (v14.0)</div>
+                    <div className="text-[10px] font-mono text-muted uppercase mb-3">Spatial Index (v14.0)</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                       <div>
                         <div className="text-sm font-bold font-mono text-accent-light">{engineData.metrics.holographic.holoGridCells ?? 0}</div>
@@ -1059,7 +1059,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="mt-2 text-[10px] font-mono text-center text-muted">
-                      Boundary TEEPs: {engineData.metrics.holographic.boundaryTeeps ?? 0}
+                      Boundary Entries: {engineData.metrics.holographic.boundaryTeeps ?? 0}
                       {" | "}Cell reduction: {engineData.metrics.holographic.cellReduction ?? "—"}
                     </div>
                   </div>
@@ -1068,15 +1068,15 @@ export default function DashboardPage() {
                 {/* Innovation metrics */}
                 {engineData.metrics.innovations && (
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <div className="text-[10px] font-mono text-muted uppercase mb-3">Innovation Metrics (v13.0+)</div>
+                    <div className="text-[10px] font-mono text-muted uppercase mb-3">Advanced Metrics (v13.0+)</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                       <div>
                         <div className="text-sm font-bold font-mono text-accent-light">{engineData.metrics.innovations.bifurcationEvents ?? 0}</div>
-                        <div className="text-[9px] text-muted">Bifurcation Events</div>
+                        <div className="text-[9px] text-muted">Branch Events</div>
                       </div>
                       <div>
                         <div className="text-sm font-bold font-mono text-warning">{engineData.metrics.innovations.machDiamondCount ?? 0}</div>
-                        <div className="text-[9px] text-muted">Mach Diamonds</div>
+                        <div className="text-[9px] text-muted">Stability Patterns</div>
                       </div>
                       <div>
                         <div className="text-sm font-bold font-mono text-success">{engineData.metrics.innovations.trajectoryLength ?? 0}</div>
@@ -1084,7 +1084,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <div className="text-sm font-bold font-mono text-accent-light">{engineData.metrics.cannon?.firings ?? 0}</div>
-                        <div className="text-[9px] text-muted">Cannon Firings</div>
+                        <div className="text-[9px] text-muted">Pipeline Runs</div>
                       </div>
                     </div>
                   </div>
@@ -1093,7 +1093,7 @@ export default function DashboardPage() {
                 {/* Recent TEEPs feed */}
                 {engineData.recentTeeps?.length > 0 && (
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <div className="text-[10px] font-mono text-muted uppercase mb-3">Recent Solved Basins (State Vectors)</div>
+                    <div className="text-[10px] font-mono text-muted uppercase mb-3">Recent Cached Solutions</div>
                     <div className="space-y-2 max-h-72 overflow-y-auto">
                       {engineData.recentTeeps.map((teep: { id: string; hash: string; created: number; hits: number; semanticMass: number; resonanceStrength: number; sig: { n: number; S: number; dS: number; phi: number; I_truth: number; naturality: number; beta_T: number; psi_coherence: number; synergy: number; Q_quality: number; trigram_hash: number } }) => (
                         <div key={teep.id} className="py-2 border-b border-border last:border-0">
@@ -1101,21 +1101,21 @@ export default function DashboardPage() {
                             <span className="text-accent-light">{teep.id}</span>
                             <span className="text-muted">
                               hits={teep.hits}
-                              {teep.semanticMass != null && <>{" | "}m<sub>s</sub>={(teep.semanticMass ?? 0).toFixed(3)}</>}
-                              {(teep.resonanceStrength ?? 0) > 0 && <>{" | "}R={(teep.resonanceStrength ?? 0).toFixed(3)}</>}
+                              {teep.semanticMass != null && <>{" | "}w={(teep.semanticMass ?? 0).toFixed(3)}</>}
+                              {(teep.resonanceStrength ?? 0) > 0 && <>{" | "}c={(teep.resonanceStrength ?? 0).toFixed(3)}</>}
                             </span>
                           </div>
                           <div className="mt-1 grid grid-cols-4 gap-x-3 gap-y-0.5 text-[9px] font-mono">
-                            <span className="text-blue-400/80">n={teep.sig.n}</span>
-                            <span className="text-green-400/80">S={teep.sig.S}</span>
-                            <span className={teep.sig.dS < 0 ? "text-green-400/80" : "text-red-400/80"}>dS={teep.sig.dS}</span>
-                            <span className="text-accent-light/80">{"\u03C6"}={teep.sig.phi}</span>
-                            <span className={teep.sig.I_truth >= 0.3 ? "text-green-400/80" : "text-red-400/80"}>I<sub>t</sub>={teep.sig.I_truth}</span>
-                            <span className={teep.sig.naturality >= 0.2 ? "text-green-400/80" : "text-red-400/80"}>nat={teep.sig.naturality}</span>
-                            <span className={Math.abs(teep.sig.beta_T - 1) < 0.5 ? "text-green-400/80" : "text-yellow-400/80"}>{"\u03B2"}<sub>T</sub>={teep.sig.beta_T}</span>
-                            <span className={teep.sig.psi_coherence >= 0.1 ? "text-green-400/80" : "text-red-400/80"}>{"\u03C8"}<sub>c</sub>={teep.sig.psi_coherence}</span>
-                            <span className={teep.sig.synergy >= 0.5 ? "text-green-400/80" : "text-red-400/80"}>syn={teep.sig.synergy}</span>
-                            <span className="text-muted/60">Q={teep.sig.Q_quality}</span>
+                            <span className="text-blue-400/80">tokens={teep.sig.n}</span>
+                            <span className="text-green-400/80">info={teep.sig.S}</span>
+                            <span className={teep.sig.dS < 0 ? "text-green-400/80" : "text-red-400/80"}>conv={teep.sig.dS}</span>
+                            <span className="text-accent-light/80">coh={teep.sig.phi}</span>
+                            <span className={teep.sig.I_truth >= 0.3 ? "text-green-400/80" : "text-red-400/80"}>truth={teep.sig.I_truth}</span>
+                            <span className={teep.sig.naturality >= 0.2 ? "text-green-400/80" : "text-red-400/80"}>natural={teep.sig.naturality}</span>
+                            <span className={Math.abs(teep.sig.beta_T - 1) < 0.5 ? "text-green-400/80" : "text-yellow-400/80"}>bal={teep.sig.beta_T}</span>
+                            <span className={teep.sig.psi_coherence >= 0.1 ? "text-green-400/80" : "text-red-400/80"}>qual={teep.sig.psi_coherence}</span>
+                            <span className={teep.sig.synergy >= 0.5 ? "text-green-400/80" : "text-red-400/80"}>synergy={teep.sig.synergy}</span>
+                            <span className="text-muted/60">quality={teep.sig.Q_quality}</span>
                             <span className="text-muted/40 col-span-2">hash={teep.sig.trigram_hash}</span>
                           </div>
                         </div>
@@ -1211,7 +1211,7 @@ export default function DashboardPage() {
               <textarea
                 value={labInput}
                 onChange={(e) => setLabInput(e.target.value)}
-                placeholder="Enter text to analyze through the SSD-RCI physics pipeline..."
+                placeholder="Enter text to analyze through the CPUAGEN validation pipeline..."
                 className="w-full bg-transparent text-foreground text-sm font-mono resize-none outline-none min-h-[60px] placeholder:text-muted/50"
                 rows={3}
               />
@@ -1244,7 +1244,7 @@ export default function DashboardPage() {
                 {/* Thermosolve Signature */}
                 <div className="bg-surface border border-border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[10px] font-mono text-muted uppercase">Thermosolve Signature</h3>
+                    <h3 className="text-[10px] font-mono text-muted uppercase">Semantic Signature</h3>
                     <button
                       onClick={() => { navigator.clipboard.writeText(JSON.stringify(labResult.signature, null, 2)); }}
                       className="text-[9px] font-mono text-muted hover:text-foreground px-2 py-0.5 rounded bg-surface-light/50 hover:bg-surface-light transition-colors"
@@ -1265,7 +1265,7 @@ export default function DashboardPage() {
                 {/* CBF Results */}
                 <div className="bg-surface border border-border rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-[10px] font-mono text-muted uppercase">Control Barrier Functions</h3>
+                    <h3 className="text-[10px] font-mono text-muted uppercase">Safety Validation Checks</h3>
                     <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${labResult.cbf.allSafe ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
                       {labResult.cbf.allSafe ? "ALL SAFE" : "BLOCKED"}
                     </span>
@@ -1285,12 +1285,12 @@ export default function DashboardPage() {
 
                 {/* Semantic Cannon — 3 stages */}
                 <div className="bg-surface border border-border rounded-lg p-4">
-                  <h3 className="text-[10px] font-mono text-muted uppercase mb-3">Semantic Cannon Pipeline</h3>
+                  <h3 className="text-[10px] font-mono text-muted uppercase mb-3">Accelerated Inference Pipeline</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {[
-                      { stage: labResult.cannon.stage1, label: "Stage 1: Cannon Fire", desc: "Golden conjugate entropy compression", color: "text-warning" },
-                      { stage: labResult.cannon.stage2, label: "Stage 2: Cavitation", desc: "Semantic vacuum via golden collapse", color: "text-accent-light" },
-                      { stage: labResult.cannon.stage3, label: "Stage 3: Mach Diamond", desc: "Flux lock — standing wave", color: "text-success" },
+                      { stage: labResult.cannon.stage1, label: "Stage 1: Initial Analysis", desc: "Entropy-based compression", color: "text-warning" },
+                      { stage: labResult.cannon.stage2, label: "Stage 2: Deep Compression", desc: "Advanced semantic compression", color: "text-accent-light" },
+                      { stage: labResult.cannon.stage3, label: "Stage 3: Convergence Lock", desc: "Stable convergence point", color: "text-success" },
                     ].map(({ stage, label, desc, color }) => (
                       <div key={label} className="bg-surface-light/30 rounded-lg p-3 border border-border/50">
                         <div className={`text-xs font-bold font-mono ${color} mb-0.5`}>{label}</div>
@@ -1305,23 +1305,23 @@ export default function DashboardPage() {
                     ))}
                   </div>
                   <div className="mt-2 text-[9px] text-muted/60 text-center">
-                    Entropy: {(labResult.signature.S ?? 0).toFixed(4)} → {(labResult.cannon.stage1.S ?? 0).toFixed(4)} → {(labResult.cannon.stage2.S ?? 0).toFixed(4)} → {(labResult.cannon.stage3.S ?? 0).toFixed(4)} (flux locked at dS=0)
+                    Info: {(labResult.signature.S ?? 0).toFixed(4)} → {(labResult.cannon.stage1.S ?? 0).toFixed(4)} → {(labResult.cannon.stage2.S ?? 0).toFixed(4)} → {(labResult.cannon.stage3.S ?? 0).toFixed(4)} (converged at dS=0)
                   </div>
                 </div>
 
                 {/* Bekenstein + Holographic */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Bekenstein Compression</h3>
-                    <p className="text-[9px] text-muted/60 mb-2">S_max = 2piRE — information bounded by Bekenstein limit</p>
+                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Optimal Compression</h3>
+                    <p className="text-[9px] text-muted/60 mb-2">Maximum information density compression</p>
                     <div className="space-y-1 text-xs font-mono">
                       <div className="flex justify-between"><span className="text-muted">S (compressed)</span><span className="text-foreground">{(labResult.bekenstein.S ?? 0).toFixed(4)}</span></div>
                       <div className="flex justify-between"><span className="text-muted">Energy</span><span className="text-foreground">{(labResult.bekenstein.energy ?? 0).toFixed(4)}</span></div>
                     </div>
                   </div>
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Holographic Boundary</h3>
-                    <p className="text-[9px] text-muted/60 mb-2">12D → 5D Fisher-weighted projection</p>
+                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Dimensional Projection</h3>
+                    <p className="text-[9px] text-muted/60 mb-2">Multi-dimensional projection</p>
                     <div className="flex gap-2 mb-1">
                       {labResult.holographic.boundary.map((v: number, i: number) => (
                         <div key={i} className="flex-1 bg-surface-light/50 rounded p-1.5 text-center">
@@ -1339,8 +1339,8 @@ export default function DashboardPage() {
                 {/* Holographic Decode Round-Trip */}
                 {labResult.decoded && (
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Holographic Decode (Round-Trip)</h3>
-                    <p className="text-[9px] text-muted/60 mb-2">5D boundary → recovered semantic coordinates</p>
+                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Projection Decode (Round-Trip)</h3>
+                    <p className="text-[9px] text-muted/60 mb-2">Projected boundary → recovered semantic coordinates</p>
                     <div className="grid grid-cols-3 gap-2 text-xs font-mono">
                       {Object.entries(labResult.decoded).map(([k, v]: [string, unknown]) => (
                         <div key={k} className="flex justify-between">
@@ -1352,11 +1352,11 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {/* Mach Diamond Detection */}
+                {/* Stability Pattern Detection */}
                 {labResult.machDiamonds && labResult.machDiamonds.length > 0 && (
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Mach Diamond Detection</h3>
-                    <p className="text-[9px] text-muted/60 mb-2">Resonance stability patterns found</p>
+                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Stability Pattern Detection</h3>
+                    <p className="text-[9px] text-muted/60 mb-2">Convergence stability patterns found</p>
                     <div className="space-y-1">
                       {labResult.machDiamonds.map((d: { key: string; strength: number; location: string }, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs font-mono">
@@ -1370,11 +1370,11 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {/* TEEP Chain Trace */}
+                {/* Knowledge Chain Trace */}
                 {labResult.chain && labResult.chain.length > 0 && (
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">TEEP Chain Trace</h3>
-                    <p className="text-[9px] text-muted/60 mb-2">Causal DAG from this TEEP</p>
+                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Knowledge Chain Trace</h3>
+                    <p className="text-[9px] text-muted/60 mb-2">Causal chain from this entry</p>
                     <div className="space-y-1">
                       {labResult.chain.map((t: { id: string; direction: string }, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs font-mono">
@@ -1392,7 +1392,7 @@ export default function DashboardPage() {
                 {/* Similar TEEPs */}
                 {labResult.nearestTeeps && labResult.nearestTeeps.length > 0 && (
                   <div className="bg-surface border border-border rounded-lg p-4">
-                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Similar TEEPs (Nearest Neighbors)</h3>
+                    <h3 className="text-[10px] font-mono text-muted uppercase mb-2">Similar Entries (Nearest Neighbors)</h3>
                     <div className="space-y-1.5">
                       {labResult.nearestTeeps.map((t: { id: string; content: string; distance: number }, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs font-mono">
@@ -1417,9 +1417,9 @@ export default function DashboardPage() {
 
             {/* ── Ensemble Compare ── */}
             <div className="mt-8 pt-6 border-t border-border/50">
-              <h2 className="text-sm font-medium mb-1">Ensemble Thermosolve — Multi-Provider Comparison</h2>
+              <h2 className="text-sm font-medium mb-1">Ensemble Analysis — Multi-Provider Comparison</h2>
               <p className="text-xs text-muted mb-4">
-                Enter response text from different providers to compute a consensus thermosolve signature.
+                Enter response text from different providers to compute a consensus semantic signature.
                 The ensemble measures agreement across providers and identifies outliers.
               </p>
               <div className="space-y-3">

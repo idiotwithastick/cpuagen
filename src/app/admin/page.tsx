@@ -62,7 +62,7 @@ export default function AdminLogin() {
             </svg>
           </div>
           <h1 className="text-xl font-bold text-[#e4e4e7]">CPUAGEN Admin</h1>
-          <p className="text-xs text-[#71717a] mt-1 font-mono">SSD-RCI Enforcement Console</p>
+          <p className="text-xs text-[#71717a] mt-1 font-mono">CPUAGEN Admin Console</p>
         </div>
 
         {locked ? (
@@ -131,10 +131,10 @@ export default function AdminLogin() {
         <div className="mt-6 p-3 rounded-lg bg-[#0c0c12] border border-[#1e1e2e]">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-            <span className="text-[10px] font-mono text-[#71717a]">SSD-RCI Enforcement Active</span>
+            <span className="text-[10px] font-mono text-[#71717a]">CPUAGEN Enforcement Active</span>
           </div>
           <div className="text-[10px] font-mono text-[#71717a]/60 mt-1">
-            All admin actions enforced through CBF barrier series
+            All admin actions enforced through safety barrier series
           </div>
         </div>
       </div>

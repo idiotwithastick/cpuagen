@@ -889,10 +889,10 @@ export default function CoworkPage() {
                   <div className={`mt-2 px-2 py-1 rounded text-[9px] font-mono flex items-center gap-2 ${
                     agent.enforcement.allSafe ? "bg-success/5 border border-success/20 text-success" : "bg-danger/5 border border-danger/20 text-danger"
                   }`}>
-                    <span>{agent.enforcement.allSafe ? "\u2713" : "\u2717"} CBF {agent.enforcement.safeCount}/{agent.enforcement.barrierCount}</span>
+                    <span>{agent.enforcement.allSafe ? "\u2713" : "\u2717"} Safety {agent.enforcement.safeCount}/{agent.enforcement.barrierCount}</span>
                     {agent.enforcement.agfHitType && (
                       <span className="text-muted">
-                        {agent.enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHE" : agent.enforcement.agfHitType === "BASIN_HIT" ? "\u26A1 BASIN" : "\uD83E\uDDEA JIT"}
+                        {agent.enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHED" : agent.enforcement.agfHitType === "BASIN_HIT" ? "\u26A1 NEAR MATCH" : "\uD83E\uDDEA FRESH"}
                       </span>
                     )}
                     {agent.enforcement.timing !== undefined && (

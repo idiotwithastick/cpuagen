@@ -783,12 +783,12 @@ export default function AutomatePage() {
             {enforcement && (
               <div className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-[10px] font-mono border ${enforcement.allSafe ? "border-green-500/20 bg-green-950/20" : "border-red-500/30 bg-red-950/30"}`}>
                 <span className={enforcement.allSafe ? "text-green-400" : "text-red-400"}>
-                  {enforcement.allSafe ? "\u2713" : "\u2717"} CBF {enforcement.safeCount}/{enforcement.barrierCount}
+                  {enforcement.allSafe ? "\u2713" : "\u2717"} Safety {enforcement.safeCount}/{enforcement.barrierCount}
                 </span>
                 {enforcement.agfHitType && (
                   <span className="text-[#a1a1aa]">
                     {enforcement.agfHitType === "FULL" || enforcement.agfHitType === "BASIN" ? "\u26A1" : "\uD83E\uDDE0"}{" "}
-                    {enforcement.agfHitType}
+                    {enforcement.agfHitType === "FULL" ? "CACHED" : enforcement.agfHitType === "BASIN" ? "NEAR MATCH" : enforcement.agfHitType}
                   </span>
                 )}
                 {enforcement.timing != null && (

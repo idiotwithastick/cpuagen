@@ -415,12 +415,12 @@ export default function WorkspacePage() {
                   {enforcement && (
                     <div className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-[10px] font-mono border mb-3 ${enforcement.allSafe ? "border-green-500/20 bg-green-950/20" : "border-red-500/30 bg-red-950/30"}`}>
                       <span className={enforcement.allSafe ? "text-green-400" : "text-red-400"}>
-                        {enforcement.allSafe ? "✓" : "✗"} CBF {enforcement.safeCount}/{enforcement.barrierCount}
+                        {enforcement.allSafe ? "✓" : "✗"} Safety {enforcement.safeCount}/{enforcement.barrierCount}
                       </span>
                       {enforcement.agfHitType && (
                         <span className="text-[#a1a1aa]">
                           {enforcement.agfHitType === "FULL" || enforcement.agfHitType === "BASIN" ? "⚡" : "🧠"}{" "}
-                          {enforcement.agfHitType}
+                          {enforcement.agfHitType === "FULL" ? "CACHED" : enforcement.agfHitType === "BASIN" ? "NEAR MATCH" : enforcement.agfHitType}
                         </span>
                       )}
                       {enforcement.timing != null && (

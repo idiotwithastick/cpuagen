@@ -252,7 +252,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
               <>
                 <span className="text-muted">|</span>
                 <span className={enforcement.agfHitType === "FULL_HIT" || enforcement.agfHitType === "BASIN_HIT" ? "text-success" : enforcement.agfHitType === "PARTIAL_HIT" ? "text-accent-light" : "text-muted"}>
-                  {enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHE" : enforcement.agfHitType === "BASIN_HIT" ? "\u26A1 BASIN" : enforcement.agfHitType === "PARTIAL_HIT" ? "\u{1F50C} BRIDGE" : "\u{1F9EA} JIT"}
+                  {enforcement.agfHitType === "FULL_HIT" ? "\u26A1 CACHED" : enforcement.agfHitType === "BASIN_HIT" ? "\u26A1 NEAR MATCH" : enforcement.agfHitType === "PARTIAL_HIT" ? "\u{1F50C} PARTIAL" : "\u{1F9EA} FRESH"}
                 </span>
                 {enforcement.basinRendered && (
                   <>
@@ -271,10 +271,10 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
           </button>
         </div>
 
-        {/* Thermosolve signatures — always visible */}
+        {/* Semantic signatures — always visible */}
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-muted">
           <span>
-            Input: n={pre.signature.n} {"\u00B7"} {"\u03C6"}={pre.signature.phi} {"\u00B7"} {preSafeCount === preBarrierCount ? (
+            Input: tokens={pre.signature.n} {"\u00B7"} coherence={pre.signature.phi} {"\u00B7"} {preSafeCount === preBarrierCount ? (
               <span className="text-success">PASSED</span>
             ) : (
               <span className="text-danger">BLOCKED</span>
@@ -282,7 +282,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
           </span>
           {post && (
             <span>
-              Output: n={post.signature.n} {"\u00B7"} {"\u03C6"}={post.signature.phi} {"\u00B7"} {postSafeCount === postBarrierCount ? (
+              Output: tokens={post.signature.n} {"\u00B7"} coherence={post.signature.phi} {"\u00B7"} {postSafeCount === postBarrierCount ? (
                 <span className="text-success">VALIDATED</span>
               ) : (
                 <span className="text-danger">FAILED</span>
@@ -324,7 +324,7 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
                   </span>
                 ) : (
                   <span className="text-muted">
-                    {(enforcement.timing.total_ms / 2500).toFixed(1)}x (JIT solve + enforcement)
+                    {(enforcement.timing.total_ms / 2500).toFixed(1)}x (fresh inference + validation)
                   </span>
                 )}
               </div>
@@ -344,9 +344,9 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
       {expanded && (
         <div className="p-3 rounded-lg bg-surface border border-border text-[10px] font-mono space-y-3">
           <div>
-            <div className="text-muted mb-1">{"\u2500\u2500"} INPUT ENFORCEMENT {"\u2500\u2500"}</div>
+            <div className="text-muted mb-1">{"\u2500\u2500"} INPUT VALIDATION {"\u2500\u2500"}</div>
             <div className="text-foreground">
-              words={pre.signature.n} {"\u00B7"} {"\u03C6"}={pre.signature.phi} {"\u00B7"} dS={"\u2264"}0
+              tokens={pre.signature.n} {"\u00B7"} coherence={pre.signature.phi} {"\u00B7"} convergence{"\u2264"}0
             </div>
             <div className="flex flex-wrap gap-1.5 mt-1.5">
               {Object.entries(pre.cbf)
@@ -369,9 +369,9 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
 
           {post && (
             <div>
-              <div className="text-muted mb-1">{"\u2500\u2500"} OUTPUT ENFORCEMENT {"\u2500\u2500"}</div>
+              <div className="text-muted mb-1">{"\u2500\u2500"} OUTPUT VALIDATION {"\u2500\u2500"}</div>
               <div className="text-foreground">
-                words={post.signature.n} {"\u00B7"} {"\u03C6"}={post.signature.phi} {"\u00B7"} dS={"\u2264"}0
+                tokens={post.signature.n} {"\u00B7"} coherence={post.signature.phi} {"\u00B7"} convergence{"\u2264"}0
               </div>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {Object.entries(post.cbf)
@@ -555,7 +555,7 @@ const EXAMPLE_PROMPTS = [
   { label: "How enforcement works", prompt: "How does CPUAGEN's enforcement engine work? What happens to my message before it reaches the AI?" },
   { label: "Safety barriers", prompt: "What are CPUAGEN's Control Barrier Functions? What does each one check for?" },
   { label: "CPUAGEN vs raw AI", prompt: "What's the difference between a CPUAGEN-enforced response and a raw LLM response? Why should I care?" },
-  { label: "What is SSD-RCI?", prompt: "What is SSD-RCI and how does it relate to CPUAGEN? Are they the same thing?" },
+  { label: "How CPUAGEN works", prompt: "How does CPUAGEN's physics-based enforcement engine work? What makes it fundamentally different from other AI platforms?" },
   { label: "Hallucination prevention", prompt: "How does CPUAGEN prevent AI hallucinations? What's different about physics-based validation vs prompt engineering?" },
   { label: "Knowledge caching", prompt: "What is knowledge caching in CPUAGEN? How does it make responses faster and more reliable?" },
   { label: "Validation signatures", prompt: "What are validation signatures and why does every CPUAGEN response have one?" },
@@ -1258,7 +1258,7 @@ export default function ChatPage() {
               </div>
               <p className="text-muted text-xs max-w-sm mx-auto mb-1 leading-relaxed">
                 Every message is validated by a full series of safety barriers before and after reaching your LLM.
-                Validated basin states enable accelerated future responses.
+                Validated cached solutions enable accelerated future responses.
               </p>
               <div className="text-muted/60 text-[10px] font-mono mb-6">
                 Ask &ldquo;How does CPUAGEN work?&rdquo; to learn more

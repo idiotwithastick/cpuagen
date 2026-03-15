@@ -479,19 +479,19 @@ function EnforcementBadge({ enforcement }: { enforcement?: EnforcementResult }) 
               <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                 {enforcement.timing.thermosolve_ms !== undefined && (
                   <>
-                    <span className="text-muted">Thermosolve (signature extraction)</span>
+                    <span className="text-muted">Signature Analysis</span>
                     <span className="text-foreground">{enforcement.timing.thermosolve_ms}ms</span>
                   </>
                 )}
                 {enforcement.timing.cbf_ms !== undefined && (
                   <>
-                    <span className="text-muted">CBF validation (9 barriers)</span>
+                    <span className="text-muted">Safety Validation (9 barriers)</span>
                     <span className="text-foreground">{enforcement.timing.cbf_ms}ms</span>
                   </>
                 )}
                 {enforcement.timing.agf_lookup_ms !== undefined && (
                   <>
-                    <span className="text-muted">AGF ledger lookup</span>
+                    <span className="text-muted">Cache Lookup</span>
                     <span className="text-foreground">{enforcement.timing.agf_lookup_ms}ms</span>
                   </>
                 )}
@@ -720,7 +720,7 @@ const EXAMPLE_PROMPTS = [
   { label: "How enforcement works", prompt: "How does CPUAGEN's enforcement engine work? What happens to my message before it reaches the AI?" },
   { label: "Safety barriers", prompt: "What are CPUAGEN's Control Barrier Functions? What does each one check for?" },
   { label: "CPUAGEN vs raw AI", prompt: "What's the difference between a CPUAGEN-enforced response and a raw LLM response? Why should I care?" },
-  { label: "What is SSD-RCI?", prompt: "What is SSD-RCI and how does it relate to CPUAGEN? Are they the same thing?" },
+  { label: "How CPUAGEN works", prompt: "How does CPUAGEN's physics-based enforcement engine work? What makes it different from other AI platforms?" },
   { label: "Hallucination prevention", prompt: "How does CPUAGEN prevent AI hallucinations? What's different about physics-based validation vs prompt engineering?" },
   { label: "TEEP caching", prompt: "What is TEEP caching in CPUAGEN? How does it make responses faster and more reliable?" },
   { label: "Thermosolve signatures", prompt: "What are thermosolve signatures and why does every CPUAGEN response have one?" },
@@ -738,14 +738,14 @@ const EXAMPLE_PROMPTS = [
   { label: "Future roadmap", prompt: "What's coming next for CPUAGEN? What features are planned for the future of the platform?" },
   { label: "GreyBeam Markup", prompt: "What is GreyBeam in CPUAGEN? How does the PDF markup and annotation system work? Can the AI draw annotations on my PDFs?" },
   { label: "Dual mode", prompt: "What is Dual mode in CPUAGEN? How does side-by-side model comparison work and why is it useful?" },
-  { label: "Semantic Cannon", prompt: "What is the Semantic Cannon in CPUAGEN? How does the 3-stage golden-ratio entropy compression pipeline work (Cannon Fire, Cavitation, Mach Diamond)?" },
-  { label: "Fisher geometry", prompt: "How does CPUAGEN use Fisher information geometry? What is the 7x7 Fisher matrix and how do adaptive dimension weights improve validation?" },
-  { label: "Ensemble consensus", prompt: "How does CPUAGEN's ensemble thermosolve work? When you query multiple LLMs, how does it detect outliers and compute a validated consensus?" },
-  { label: "Bekenstein bound", prompt: "What is Bekenstein Bound Compression in CPUAGEN? How does the information density limit from physics (S_max = 2πRE/ℏc) apply to TEEP signature storage?" },
-  { label: "Mach Diamonds", prompt: "What are Mach Diamonds in CPUAGEN's enforcement engine? How does the system detect standing-wave interference patterns where multiple queries converge?" },
-  { label: "TEEP chains", prompt: "How does TEEP Chain Tracing work? How does CPUAGEN traverse the causal DAG of parent/child TEEP relationships to trace knowledge provenance?" },
+  { label: "Inference pipeline", prompt: "What is CPUAGEN's accelerated inference pipeline? How does the 3-stage compression system work to optimize response quality?" },
+  { label: "Adaptive weights", prompt: "How does CPUAGEN use adaptive validation weights? How do the dimension weights self-tune to improve validation accuracy?" },
+  { label: "Ensemble consensus", prompt: "How does CPUAGEN's ensemble analysis work? When you query multiple LLMs, how does it detect outliers and compute a validated consensus?" },
+  { label: "Optimal compression", prompt: "How does CPUAGEN compress and store validated knowledge entries at maximum information density? What makes the compression optimal?" },
+  { label: "Stability patterns", prompt: "How does CPUAGEN detect convergence stability patterns when multiple queries reinforce the same knowledge regions?" },
+  { label: "Knowledge chains", prompt: "How does knowledge chain tracing work? How does CPUAGEN traverse parent/child relationships to trace knowledge provenance?" },
   { label: "Agent Loop", prompt: "What is CPUAGEN's Agent Loop? How does the autonomous task execution system work, and what kinds of multi-step tasks can it handle?" },
-  { label: "Memory persistence", prompt: "How does CPUAGEN's memory system work? How are conversations saved, retrieved, and how does the morphic field strengthen over time?" },
+  { label: "Memory persistence", prompt: "How does CPUAGEN's memory system work? How are conversations saved, retrieved, and how does knowledge density increase over time?" },
   { label: "Browser automation", prompt: "What is CPUAGEN's Automate mode? How can I describe web tasks in natural language and have the AI generate step-by-step browser automation plans?" },
   { label: "Workspace & VFS", prompt: "What is CPUAGEN's Workspace mode? How does the virtual file system work with the Monaco editor and AI coding assistant?" },
   { label: "Extensions system", prompt: "How do CPUAGEN Extensions work? What capabilities can I add, and how do installed extensions enhance AI conversations?" },
@@ -1444,7 +1444,7 @@ export default function ChatPage() {
     el.style.height = Math.min(el.scrollHeight, 200) + "px";
   };
 
-  // SSD-RCI Macro Emoji Programs
+  // CPUAGEN Macro Programs
   const MACROS = [
     { emoji: "\uD83E\uDDF2", name: "Prompt", desc: "Gateway prompt processing", prefix: "\uD83E\uDDF2 " },
     { emoji: "\uD83D\uDC1B", name: "Bug Inspect", desc: "Parallel security/logic/resource analysis", prefix: "\uD83D\uDC1B " },
