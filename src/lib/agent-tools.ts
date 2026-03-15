@@ -138,7 +138,7 @@ export async function executeTool(call: ToolCall): Promise<ToolResult> {
         content = executeCalculator(call.arguments as { expression: string });
         break;
       case "code_execute":
-        content = executeCode(call.arguments as { code: string });
+        content = await executeCode(call.arguments as { code: string });
         break;
       case "file_generate":
         content = executeFileGenerate(call.arguments as { filename: string; content: string; mime_type?: string });
@@ -174,7 +174,39 @@ export async function executeTool(call: ToolCall): Promise<ToolResult> {
 async function executeWebSearch(args: { query: string; num_results?: number }): Promise<string> {
   const { query, num_results = 5 } = args;
 
-  // Use DuckDuckGo Instant Answer API (no API key needed)
+  // Try DuckDuckGo HTML search first for richer results
+  try {
+    const htmlUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const htmlRes = await fetch(htmlUrl, {
+      headers: { "User-Agent": "CPUAGEN-Agent/1.0" },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (htmlRes.ok) {
+      const html = await htmlRes.text();
+      // Parse search results from HTML
+      const resultPattern = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+      const results: string[] = [];
+      let match;
+      while ((match = resultPattern.exec(html)) !== null && results.length < num_results) {
+        const url = match[1].replace(/.*uddg=/, "").split("&")[0];
+        const title = match[2].replace(/<[^>]+>/g, "").trim();
+        const snippet = match[3].replace(/<[^>]+>/g, "").trim();
+        if (title && snippet) {
+          const decodedUrl = decodeURIComponent(url);
+          results.push(`**${title}**\n${snippet}\nURL: ${decodedUrl}`);
+        }
+      }
+
+      if (results.length > 0) {
+        return `Search results for "${query}":\n\n${results.join("\n\n")}`;
+      }
+    }
+  } catch {
+    // Fall through to Instant Answer API
+  }
+
+  // Fallback: DuckDuckGo Instant Answer API
   const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
   const res = await fetch(ddgUrl, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`Search failed: ${res.status}`);
@@ -189,19 +221,16 @@ async function executeWebSearch(args: { query: string; num_results?: number }): 
 
   const results: string[] = [];
 
-  // Abstract (main result)
   if (data.AbstractText) {
     results.push(`**${data.AbstractSource || "Result"}**: ${data.AbstractText}\nURL: ${data.AbstractURL || "N/A"}`);
   }
 
-  // Direct results
   if (data.Results) {
     for (const r of data.Results.slice(0, num_results)) {
       if (r.Text) results.push(`• ${r.Text}\n  ${r.FirstURL || ""}`);
     }
   }
 
-  // Related topics
   if (data.RelatedTopics) {
     for (const r of data.RelatedTopics.slice(0, num_results - results.length)) {
       if (r.Text) results.push(`• ${r.Text}\n  ${r.FirstURL || ""}`);
@@ -251,27 +280,86 @@ function executeCalculator(args: { expression: string }): string {
   return `${expression} = **${result}**`;
 }
 
-function executeCode(args: { code: string }): string {
+async function executeCode(args: { code: string }): Promise<string> {
   const { code } = args;
   const outputs: string[] = [];
+  let returnValue: unknown = undefined;
 
   // Create a sandboxed console
   const mockConsole = {
-    log: (...a: unknown[]) => outputs.push(a.map(String).join(" ")),
-    error: (...a: unknown[]) => outputs.push("[ERROR] " + a.map(String).join(" ")),
-    warn: (...a: unknown[]) => outputs.push("[WARN] " + a.map(String).join(" ")),
-    info: (...a: unknown[]) => outputs.push(a.map(String).join(" ")),
+    log: (...a: unknown[]) => outputs.push(a.map((v) => typeof v === "object" ? JSON.stringify(v, null, 2) : String(v)).join(" ")),
+    error: (...a: unknown[]) => outputs.push("[ERROR] " + a.map((v) => typeof v === "object" ? JSON.stringify(v) : String(v)).join(" ")),
+    warn: (...a: unknown[]) => outputs.push("[WARN] " + a.map((v) => typeof v === "object" ? JSON.stringify(v) : String(v)).join(" ")),
+    info: (...a: unknown[]) => outputs.push(a.map((v) => typeof v === "object" ? JSON.stringify(v, null, 2) : String(v)).join(" ")),
+    table: (data: unknown) => outputs.push(JSON.stringify(data, null, 2)),
   };
 
+  // Provide common utilities in sandbox
+  const sandbox = {
+    console: mockConsole,
+    JSON,
+    Math,
+    Date,
+    Array,
+    Object,
+    String: globalThis.String,
+    Number: globalThis.Number,
+    Boolean: globalThis.Boolean,
+    RegExp,
+    Map,
+    Set,
+    parseInt,
+    parseFloat,
+    isNaN,
+    isFinite,
+    encodeURIComponent,
+    decodeURIComponent,
+    encodeURI,
+    decodeURI,
+    atob: globalThis.atob,
+    btoa: globalThis.btoa,
+    setTimeout: undefined,
+    setInterval: undefined,
+    fetch: globalThis.fetch, // Allow HTTP requests from code
+    Promise,
+    URL,
+    URLSearchParams,
+    TextEncoder,
+    TextDecoder,
+  };
+
+  const sandboxKeys = Object.keys(sandbox);
+  const sandboxValues = Object.values(sandbox);
+
   try {
-    // Basic sandboxing — prevent access to process, require, etc.
-    const fn = new Function("console", `"use strict";\n${code}`);
-    fn(mockConsole);
+    // Wrap code to capture the last expression value
+    // Support both sync and async code
+    const wrappedCode = `"use strict";
+return (async () => {
+${code}
+})();`;
+
+    const fn = new Function(...sandboxKeys, wrappedCode);
+
+    // Execute with 10s timeout
+    const result = await Promise.race([
+      fn(...sandboxValues),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Execution timeout (10s)")), 10000)),
+    ]);
+
+    if (result !== undefined) {
+      returnValue = result;
+    }
   } catch (err) {
     outputs.push(`[Runtime Error] ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  return outputs.length > 0 ? outputs.join("\n") : "[No output — code executed successfully with no console output]";
+  const parts: string[] = [];
+  if (outputs.length > 0) parts.push(outputs.join("\n"));
+  if (returnValue !== undefined && outputs.length === 0) {
+    parts.push(`→ ${typeof returnValue === "object" ? JSON.stringify(returnValue, null, 2) : String(returnValue)}`);
+  }
+  return parts.length > 0 ? parts.join("\n") : "[No output — code executed successfully with no console output]";
 }
 
 function executeFileGenerate(args: { filename: string; content: string; mime_type?: string }): string {
