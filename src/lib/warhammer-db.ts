@@ -10,6 +10,7 @@ import type {
   OptimizedPurchase,
   ArmyOptimizationResult,
 } from "./warhammer-types";
+import { STATIC_FACTIONS } from "./warhammer-types";
 
 const D1_DATABASE_ID = "66c4ee55-8fbe-45d5-9a98-e88328aaf595";
 const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID || "b621d14f660c227bfec605351679bb86";
@@ -50,13 +51,33 @@ async function d1Query<T = Record<string, unknown>>(
 }
 
 export async function getFactions(gameSystem?: GameSystem): Promise<WHFaction[]> {
+  // Try D1 first
+  const d1Result = gameSystem
+    ? await d1Query<WHFaction>(
+        "SELECT * FROM wh_factions WHERE game_system = ? ORDER BY name",
+        [gameSystem],
+      )
+    : await d1Query<WHFaction>("SELECT * FROM wh_factions ORDER BY game_system, name");
+
+  if (d1Result.length > 0) return d1Result;
+
+  // Fallback to static faction list when D1 is empty/unavailable
   if (gameSystem) {
-    return d1Query<WHFaction>(
-      "SELECT * FROM wh_factions WHERE game_system = ? ORDER BY name",
-      [gameSystem],
-    );
+    return (STATIC_FACTIONS[gameSystem] || []).map((f) => ({
+      id: f.id,
+      name: f.name,
+      game_system: gameSystem,
+      unit_count: 0,
+    }));
   }
-  return d1Query<WHFaction>("SELECT * FROM wh_factions ORDER BY game_system, name");
+  // Return all factions across all game systems
+  const all: WHFaction[] = [];
+  for (const [gs, factions] of Object.entries(STATIC_FACTIONS)) {
+    for (const f of factions) {
+      all.push({ id: f.id, name: f.name, game_system: gs as GameSystem, unit_count: 0 });
+    }
+  }
+  return all;
 }
 
 export async function searchProducts(

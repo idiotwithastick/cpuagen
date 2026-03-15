@@ -18,9 +18,9 @@ export async function GET(req: NextRequest) {
   try {
     const sig = thermosolve(`warhammer-prices:${productId}`);
     const cbf = cbfCheck(sig);
-    if (!cbf.safe) {
+    if (!cbf.allSafe) {
       return Response.json(
-        { ok: false, error: "Request blocked by enforcement", barriers: cbf.failures },
+        { ok: false, error: "Request blocked by enforcement" },
         { status: 403 },
       );
     }

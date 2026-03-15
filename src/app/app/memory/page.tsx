@@ -84,19 +84,22 @@ export default function MemoryPage() {
     try {
       const res = await fetch("/api/teep");
       const data = await res.json();
-      if (data.ok) {
+      if (data.ok && data.snapshot) {
         const s = data.snapshot;
+        const teeps = Array.isArray(s.teeps) ? s.teeps : [];
+        const hits = s.counters?.cacheHits ?? 0;
+        const misses = s.counters?.cacheMisses ?? 0;
         setKnowledge({
-          version: s.version,
-          teepCount: s.teeps.length,
-          cacheHits: s.counters.cacheHits,
-          cacheMisses: s.counters.cacheMisses,
-          hitRate: (s.counters.cacheHits + s.counters.cacheMisses) > 0
-            ? ((s.counters.cacheHits / (s.counters.cacheHits + s.counters.cacheMisses)) * 100).toFixed(1)
+          version: s.version ?? "unknown",
+          teepCount: teeps.length,
+          cacheHits: hits,
+          cacheMisses: misses,
+          hitRate: (hits + misses) > 0
+            ? ((hits / (hits + misses)) * 100).toFixed(1)
             : "0.0",
-          morphicFieldStrength: s.morphicFieldStrength,
-          totalResonanceEvents: s.totalResonanceEvents,
-          teeps: s.teeps,
+          morphicFieldStrength: s.morphicFieldStrength ?? 0,
+          totalResonanceEvents: s.totalResonanceEvents ?? 0,
+          teeps,
         });
       }
     } catch { /* ignore */ }
@@ -471,7 +474,7 @@ export default function MemoryPage() {
                         <span className="text-muted">Dominant</span>
                         <span className="text-warning">{engineMetrics.fisher.dominantDimension ?? "—"}</span>
                       </div>
-                      {Object.entries(engineMetrics.fisher.weights).slice(0, 4).map(([dim, w]) => (
+                      {Object.entries(engineMetrics.fisher.weights ?? {}).slice(0, 4).map(([dim, w]) => (
                         <div key={dim} className="flex items-center gap-2">
                           <span className="text-[9px] font-mono text-muted w-16 truncate">{dim}</span>
                           <div className="flex-1 h-1.5 bg-background rounded-full overflow-hidden">
@@ -487,7 +490,7 @@ export default function MemoryPage() {
             )}
 
             {/* Barrier Fail History */}
-            {engineMetrics?.metrics && Object.keys(engineMetrics.metrics.barrierFailCounts).length > 0 && (
+            {engineMetrics?.metrics && engineMetrics.metrics.barrierFailCounts && Object.keys(engineMetrics.metrics.barrierFailCounts).length > 0 && (
               <div className="bg-surface border border-danger/20 rounded-lg p-3">
                 <div className="text-[10px] font-mono text-danger/80 uppercase mb-2">Barrier Failure History</div>
                 <div className="grid grid-cols-3 md:grid-cols-5 gap-2">

@@ -309,6 +309,10 @@ interface FeedbackEntry {
   ip: string;
   timestamp: number;
   status: "new" | "reviewed" | "resolved" | "dismissed";
+  solvePrompt?: string;
+  solveStatus?: "pending_review" | "approved" | "rejected" | "completed";
+  solveGeneratedAt?: number;
+  solveApprovedAt?: number;
 }
 
 const feedbackStore: FeedbackEntry[] = [];
@@ -355,4 +359,90 @@ export function deleteFeedback(id: string): boolean {
   if (idx === -1) return false;
   feedbackStore.splice(idx, 1);
   return true;
+}
+
+export function generateSolvePrompt(id: string): { ok: boolean; prompt?: string; error?: string } {
+  const fb = feedbackStore.find((f) => f.id === id);
+  if (!fb) return { ok: false, error: "Feedback not found" };
+
+  const isBug = fb.type === "bug";
+  const prompt = `# ${isBug ? "BUG FIX" : "FEATURE REQUEST"} — CPUAGEN.com Development Task
+
+## Source
+- **Feedback ID:** ${fb.id}
+- **Type:** ${fb.type}
+- **Submitted:** ${new Date(fb.timestamp).toISOString()}
+- **Page:** ${fb.page || "Unknown"}
+${fb.email ? `- **Reporter:** ${fb.email}` : ""}
+
+## Problem Statement
+**${fb.subject}**
+
+${fb.description}
+
+## Instructions
+${isBug ? `1. Identify the root cause of this bug in the CPUAGEN codebase (cpuagen-live/)
+2. Check the relevant files — start from the page mentioned above
+3. Write the fix with minimal changes
+4. Verify the fix compiles (npx next build)
+5. Test in preview to confirm the bug is resolved
+6. Commit with message: "fix: ${fb.subject.toLowerCase().slice(0, 50)}"` :
+`1. Understand the feature request and its scope
+2. Identify which files need to be created or modified
+3. Implement the feature with minimal, focused changes
+4. Verify it compiles (npx next build)
+5. Test in preview to confirm it works
+6. Commit with message: "feat: ${fb.subject.toLowerCase().slice(0, 50)}"`}
+
+## Context
+This solve was generated from user feedback on cpuagen.com. The codebase is a Next.js 16 app with:
+- App Router (src/app/)
+- Tailwind CSS styling
+- SSD-RCI enforcement (thermosolve + cbfCheck on all API routes)
+- Deployed to Vercel
+
+## Status
+This task has been **approved for autonomous execution**. Proceed without further confirmation.
+
+---
+*Generated: ${new Date().toISOString()}*
+*Feedback ID: ${fb.id}*`;
+
+  fb.solvePrompt = prompt;
+  fb.solveStatus = "pending_review";
+  fb.solveGeneratedAt = Date.now();
+
+  return { ok: true, prompt };
+}
+
+export function updateSolveStatus(id: string, status: "approved" | "rejected" | "completed"): boolean {
+  const fb = feedbackStore.find((f) => f.id === id);
+  if (!fb || !fb.solvePrompt) return false;
+  fb.solveStatus = status;
+  if (status === "approved") fb.solveApprovedAt = Date.now();
+  return true;
+}
+
+export function getApprovedSolves(): Array<{ id: string; type: string; subject: string; prompt: string; approvedAt: number }> {
+  return feedbackStore
+    .filter((fb) => fb.solveStatus === "approved" && fb.solvePrompt)
+    .map((fb) => ({
+      id: fb.id,
+      type: fb.type,
+      subject: fb.subject,
+      prompt: fb.solvePrompt!,
+      approvedAt: fb.solveApprovedAt || fb.solveGeneratedAt || 0,
+    }));
+}
+
+export function getPendingSolves(): Array<{ id: string; type: string; subject: string; prompt: string; generatedAt: number }> {
+  return feedbackStore
+    .filter((fb) => fb.solveStatus === "pending_review" && fb.solvePrompt)
+    .map((fb) => ({
+      id: fb.id,
+      type: fb.type,
+      subject: fb.subject,
+      prompt: fb.solvePrompt!,
+      generatedAt: fb.solveGeneratedAt || 0,
+    }));
 }

@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
 
     const sig = thermosolve(`warhammer-optimize:${body.items.length}-items`);
     const cbf = cbfCheck(sig);
-    if (!cbf.safe) {
+    if (!cbf.allSafe) {
       return Response.json(
-        { ok: false, error: "Request blocked by enforcement", barriers: cbf.failures },
+        { ok: false, error: "Request blocked by enforcement" },
         { status: 403 },
       );
     }

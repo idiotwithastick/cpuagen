@@ -24,9 +24,9 @@ export async function GET(req: NextRequest) {
   try {
     const sig = thermosolve(`memory-get:${resource}:${userId}`);
     const cbf = cbfCheck(sig);
-    if (!cbf.safe) {
+    if (!cbf.allSafe) {
       return Response.json(
-        { ok: false, error: "Request blocked by enforcement", barriers: cbf.failures },
+        { ok: false, error: "Request blocked by enforcement" },
         { status: 403 },
       );
     }
@@ -69,9 +69,9 @@ export async function POST(req: NextRequest) {
   try {
     const sig = thermosolve(`memory-post:${action}:${userId}`);
     const cbf = cbfCheck(sig);
-    if (!cbf.safe) {
+    if (!cbf.allSafe) {
       return Response.json(
-        { ok: false, error: "Request blocked by enforcement", barriers: cbf.failures },
+        { ok: false, error: "Request blocked by enforcement" },
         { status: 403 },
       );
     }
