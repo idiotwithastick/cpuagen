@@ -736,6 +736,7 @@ export default function ChatPage() {
   const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([]);
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [macrosOpen, setMacrosOpen] = useState(false);
+  const [detailLevel, setDetailLevel] = useState<"concise" | "standard" | "detailed">("standard");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -1158,6 +1159,7 @@ export default function ChatPage() {
             dataUrl: a.dataUrl,
           })),
           ...(adminToken ? { adminToken } : {}),
+          ...(detailLevel !== "standard" ? { detailLevel } : {}),
         }),
       });
 
@@ -1418,6 +1420,22 @@ export default function ChatPage() {
           </select>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-md border border-border overflow-hidden">
+            {(["concise", "standard", "detailed"] as const).map((level) => (
+              <button
+                key={level}
+                onClick={() => setDetailLevel(level)}
+                className={`px-2 py-1 text-[9px] font-mono transition-colors cursor-pointer ${
+                  detailLevel === level
+                    ? level === "concise" ? "bg-accent/20 text-accent-light" : level === "detailed" ? "bg-warning/20 text-warning" : "bg-success/20 text-success"
+                    : "text-muted hover:text-foreground hover:bg-surface-light"
+                }`}
+                title={level === "concise" ? "Short, bullet-point responses" : level === "detailed" ? "Thorough, comprehensive responses" : "Balanced responses"}
+              >
+                {level === "concise" ? "\u26A1" : level === "detailed" ? "\uD83D\uDCD6" : "\u2696\uFE0F"} {level[0].toUpperCase() + level.slice(1)}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setMacrosOpen(!macrosOpen)}
             className={`px-2.5 py-1 rounded-md text-[10px] font-mono border transition-colors cursor-pointer ${

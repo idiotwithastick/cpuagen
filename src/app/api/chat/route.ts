@@ -83,6 +83,7 @@ interface ChatRequest {
   model: string;
   attachments?: FileAttachmentPayload[];
   adminToken?: string;
+  detailLevel?: "concise" | "standard" | "detailed";
 }
 
 // Validate admin token: base64 of "username:timestamp:ip"
@@ -617,8 +618,23 @@ export async function POST(req: Request) {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const { messages, provider: rawProvider, apiKey: clientKey, model: rawModel, attachments, adminToken } = body;
+  const { messages, provider: rawProvider, apiKey: clientKey, model: rawModel, attachments, adminToken, detailLevel } = body;
   const isAdmin = isValidAdminToken(adminToken);
+
+  // Inject detail level instruction into messages
+  const detailInstruction = detailLevel === "concise"
+    ? "Respond concisely. Use short sentences, bullet points, and minimal explanation. Aim for under 100 words."
+    : detailLevel === "detailed"
+    ? "Respond in full detail. Provide thorough explanations, examples, code samples where relevant, and cover edge cases. Be comprehensive."
+    : null;
+  if (detailInstruction) {
+    const firstSystemIdx = messages.findIndex((m) => m.role === "system");
+    if (firstSystemIdx >= 0) {
+      messages[firstSystemIdx] = { ...messages[firstSystemIdx], content: messages[firstSystemIdx].content + "\n\n" + detailInstruction };
+    } else {
+      messages.unshift({ role: "system", content: detailInstruction });
+    }
+  }
 
   if (!messages?.length || !rawProvider || !rawModel) {
     return new Response("Missing required fields", { status: 400 });
