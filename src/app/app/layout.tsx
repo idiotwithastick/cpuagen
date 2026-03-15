@@ -58,7 +58,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="h-14 flex items-center gap-2 px-4 border-b border-border shrink-0">
+        <Link href="/" className="h-14 flex items-center gap-2 px-4 border-b border-border shrink-0 hover:bg-surface-light/50 transition-colors" title="Back to CPUAGEN home — features, architecture, and value proposition">
           <div className="w-6 h-6 rounded bg-accent/20 border border-accent/40 flex items-center justify-center">
             <span className="text-accent-light text-xs font-bold">C</span>
           </div>
@@ -70,7 +70,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           }`}>
             {isAdmin ? "ADMIN" : "ALPHA"}
           </span>
-        </div>
+        </Link>
 
         <nav className="flex-1 py-3 px-2 space-y-1">
           {nav.map((item) => (
