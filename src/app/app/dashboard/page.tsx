@@ -93,7 +93,11 @@ export default function DashboardPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedTeep, setSelectedTeep] = useState<TeepEntry | null>(null);
   const [teepFilter, setTeepFilter] = useState("");
-  const [tab, setTab] = useState<"overview" | "teeps" | "fisher" | "psi" | "manifold" | "geometry" | "enforcement" | "lab">("overview");
+  const [tab, setTab] = useState<"overview" | "teeps" | "fisher" | "psi" | "manifold" | "geometry" | "enforcement" | "lab" | "search">("overview");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{ id: string; content: string; distance: number; signature: { S: number; phi: number; I_truth: number } }[]>([]);
+  const [searchSig, setSearchSig] = useState<{ n: number; S: number; dS: number; phi: number; I_truth: number; psi_coherence: number } | null>(null);
+  const [searching, setSearching] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [engineData, setEngineData] = useState<any>(null);
   const [labInput, setLabInput] = useState("");
@@ -212,7 +216,7 @@ export default function DashboardPage() {
 
       {/* Tab bar */}
       <div className="flex gap-1 px-6 pt-3">
-        {(["overview", "teeps", "fisher", "psi", "manifold", "geometry", "enforcement", "lab"] as const).map((t) => (
+        {(["overview", "teeps", "search", "fisher", "psi", "manifold", "geometry", "enforcement", "lab"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -222,7 +226,7 @@ export default function DashboardPage() {
                 : "text-muted hover:text-foreground hover:bg-surface-light"
             }`}
           >
-            {t === "overview" ? "Overview" : t === "teeps" ? `TEEPs (${teeps.length})` : t === "fisher" ? "Fisher Metric" : t === "psi" ? "PsiState" : t === "manifold" ? "Manifold" : t === "geometry" ? "Geometry" : t === "enforcement" ? "Enforcement" : "Lab"}
+            {t === "overview" ? "Overview" : t === "teeps" ? `TEEPs (${teeps.length})` : t === "search" ? "\uD83D\uDD0D Search" : t === "fisher" ? "Fisher Metric" : t === "psi" ? "PsiState" : t === "manifold" ? "Manifold" : t === "geometry" ? "Geometry" : t === "enforcement" ? "Enforcement" : "Lab"}
           </button>
         ))}
       </div>
@@ -403,6 +407,102 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {tab === "search" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className="text-lg font-semibold text-foreground">TEEP Knowledge Explorer</h2>
+              <span className="text-[10px] font-mono text-muted bg-surface-light px-2 py-0.5 rounded">Semantic Search</span>
+            </div>
+            <p className="text-xs text-muted">
+              Search the TEEP ledger by semantic meaning. Your query is thermosolve-encoded and compared against all cached basin states using Fisher geodesic distance.
+            </p>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!searchQuery.trim() || searching) return;
+                setSearching(true);
+                setSearchResults([]);
+                setSearchSig(null);
+                try {
+                  const res = await fetch("/api/teep/search", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: searchQuery.trim(), k: 15, maxDistance: 4.0 }),
+                  });
+                  const data = await res.json();
+                  if (data.ok) {
+                    setSearchResults(data.results);
+                    setSearchSig(data.signature);
+                  }
+                } catch { /* ignore */ }
+                setSearching(false);
+              }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search TEEPs by meaning... (e.g., 'thermodynamic entropy', 'neural network', 'code optimization')"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-surface border border-border text-foreground placeholder:text-muted/50 font-mono text-sm focus:outline-none focus:border-accent/50 transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={searching || !searchQuery.trim()}
+                className="px-6 py-2.5 rounded-lg bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {searching ? "Searching..." : "Search"}
+              </button>
+            </form>
+
+            {searchSig && (
+              <div className="p-3 rounded-lg bg-surface border border-border text-[10px] font-mono">
+                <span className="text-muted">Query signature: </span>
+                <span className="text-accent-light">n={searchSig.n} | S={searchSig.S} | dS={searchSig.dS} | {"\u03C6"}={searchSig.phi} | I<sub>t</sub>={searchSig.I_truth} | {"\u03C8"}={searchSig.psi_coherence}</span>
+                <span className="text-muted ml-3">{searchResults.length} result{searchResults.length !== 1 ? "s" : ""}</span>
+              </div>
+            )}
+
+            {searchResults.length > 0 && (
+              <div className="space-y-2">
+                {searchResults.map((r, i) => (
+                  <div key={r.id} className="p-3 rounded-lg bg-surface border border-border hover:border-accent/30 transition-colors">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-mono text-accent-light">{r.id}</span>
+                          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                            r.distance < 0.5 ? "bg-success/10 text-success" :
+                            r.distance < 1.5 ? "bg-warning/10 text-warning" :
+                            "bg-muted/10 text-muted"
+                          }`}>
+                            d={r.distance}
+                          </span>
+                          <span className="text-[9px] font-mono text-muted">#{i + 1}</span>
+                        </div>
+                        <p className="text-xs text-foreground/80 font-mono leading-relaxed break-words">
+                          {r.content}
+                        </p>
+                      </div>
+                      <div className="text-right text-[9px] font-mono text-muted shrink-0">
+                        <div>S={r.signature.S}</div>
+                        <div>{"\u03C6"}={r.signature.phi}</div>
+                        <div>I<sub>t</sub>={r.signature.I_truth}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {searchSig && searchResults.length === 0 && !searching && (
+              <div className="text-center py-8 text-muted text-sm">
+                No TEEPs found within semantic distance threshold. Try a broader query.
+              </div>
+            )}
           </div>
         )}
 
