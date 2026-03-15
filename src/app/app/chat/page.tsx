@@ -1450,10 +1450,10 @@ export default function ChatPage() {
           </button>
           <button
             onClick={() => setShowHelp(!showHelp)}
-            className={`px-2 py-1 rounded-md text-[10px] font-mono border transition-colors cursor-pointer ${showHelp ? "bg-accent/20 text-accent-light border-accent/30" : "text-muted border-border hover:border-accent/30 hover:text-accent-light"}`}
+            className={`px-2.5 py-1 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${showHelp ? "bg-accent/20 text-accent-light border-accent/30" : "text-muted border-border hover:border-accent/30 hover:text-accent-light"}`}
             title="How to use Chat"
           >
-            ?
+            HOW TO ?
           </button>
           <button
             onClick={startNewChat}

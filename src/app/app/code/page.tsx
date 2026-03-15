@@ -498,10 +498,10 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
           </button>
           <button
             onClick={() => setShowHelp(!showHelp)}
-            className={`ml-auto px-2 py-1 text-xs rounded cursor-pointer transition-colors ${showHelp ? "bg-accent/20 text-accent-light" : "text-muted hover:text-foreground"}`}
+            className={`ml-auto px-2.5 py-1 text-[10px] font-semibold rounded-md border cursor-pointer transition-colors ${showHelp ? "bg-accent/20 text-accent-light border-accent/30" : "text-muted border-border hover:text-foreground hover:border-accent/30"}`}
             title="How to use Code Editor"
           >
-            ?
+            HOW TO ?
           </button>
         </div>
 
