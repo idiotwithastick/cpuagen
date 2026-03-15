@@ -176,6 +176,116 @@ Supported chart types: bar, line, pie, doughnut, scatter, area. Always include t
 \`\`\`
 Use standard SQL. The system will execute against the configured Cloudflare D1 database.`,
   },
+
+  "multi-model": {
+    id: "multi-model",
+    needsSetup: false,
+    clientSideOnly: true,
+    systemPrompt: `You have access to a multi-model comparison tool. When the user asks you to compare models, get multiple perspectives, or run a "model council", output a comparison block:
+\`\`\`model_compare
+{"prompt": "the question to send to all models", "models": ["openai", "anthropic", "google"]}
+\`\`\`
+The system will query multiple AI models in parallel and display their responses side-by-side. Users can then pick the best answer or ask you to synthesize them.`,
+  },
+
+  "file-upload": {
+    id: "file-upload",
+    needsSetup: false,
+    clientSideOnly: true,
+    tools: ["file_analyze"],
+    systemPrompt: `You have access to a file analysis tool. Users can upload CSV, Excel (.xlsx), Word (.docx), and text files. When files are uploaded, their content is extracted and provided to you. You can:
+- Analyze CSV/Excel data: summarize columns, compute statistics, find patterns
+- Parse Word documents: extract text, summarize, answer questions about content
+- Process any text-based file format
+When analyzing tabular data, use the data-viz extension to create charts if installed.`,
+  },
+
+  "video-gen": {
+    id: "video-gen",
+    needsSetup: true,
+    configKeys: [
+      { key: "provider", label: "Provider", placeholder: "runway (Runway ML) or kling (Kling AI)" },
+      { key: "apiKey", label: "API Key", placeholder: "Your API key...", secret: true },
+    ],
+    tools: ["video_generate"],
+    systemPrompt: `You have access to a video_generate tool. When the user asks you to create, generate, or produce a video, use it. Output a tool call block:
+\`\`\`tool_call
+{"tool": "video_generate", "args": {"prompt": "detailed video description", "duration": 4, "aspect_ratio": "16:9"}}
+\`\`\`
+The system will generate a short video clip (4-10 seconds) using the configured AI video provider and display it inline.`,
+  },
+
+  "deep-research": {
+    id: "deep-research",
+    needsSetup: false,
+    tools: ["deep_research"],
+    systemPrompt: `You have access to a deep_research tool. When the user asks for in-depth research, comprehensive analysis, or a thorough investigation of a topic, use it. Output a tool call block:
+\`\`\`tool_call
+{"tool": "deep_research", "args": {"query": "research topic", "depth": "thorough", "max_sources": 10}}
+\`\`\`
+The system will autonomously search multiple sources, cross-reference findings, and produce a structured research report with inline citations. This takes 30-120 seconds.`,
+  },
+
+  "email": {
+    id: "email",
+    needsSetup: true,
+    configKeys: [
+      { key: "provider", label: "Provider", placeholder: "gmail or outlook" },
+      { key: "apiKey", label: "OAuth Token / App Password", placeholder: "Your token...", secret: true },
+      { key: "email", label: "Email Address", placeholder: "you@gmail.com" },
+    ],
+    tools: ["email_read", "email_send", "email_search"],
+    systemPrompt: `You have access to email tools. When the user asks about their email, use these tool call blocks:
+\`\`\`tool_call
+{"tool": "email_read", "args": {"count": 10, "folder": "inbox"}}
+\`\`\`
+\`\`\`tool_call
+{"tool": "email_search", "args": {"query": "from:boss@company.com subject:meeting"}}
+\`\`\`
+\`\`\`tool_call
+{"tool": "email_send", "args": {"to": "recipient@email.com", "subject": "Subject", "body": "Email body"}}
+\`\`\`
+Available actions: read (list recent), search, send, draft, summarize thread.`,
+  },
+
+  "screen-share": {
+    id: "screen-share",
+    needsSetup: false,
+    clientSideOnly: true,
+    systemPrompt: `You have access to screen capture capabilities. When the user shares their screen or a screenshot, you can analyze the visual content and provide feedback, identify UI issues, read text from images, or help debug what's shown on screen.`,
+  },
+
+  "webhooks": {
+    id: "webhooks",
+    needsSetup: true,
+    configKeys: [
+      { key: "url", label: "Webhook URL", placeholder: "https://your-service.com/webhook" },
+      { key: "secret", label: "Webhook Secret (optional)", placeholder: "whsec_...", secret: true },
+      { key: "events", label: "Events to Trigger", placeholder: "chat.complete, tool.execute" },
+    ],
+    tools: ["webhook_send"],
+    systemPrompt: `You have access to a webhook tool. When the user asks to trigger a webhook or send data to an external service, use it. Output a tool call block:
+\`\`\`tool_call
+{"tool": "webhook_send", "args": {"event": "custom_event", "payload": {"key": "value"}}}
+\`\`\``,
+  },
+
+  "text-to-speech": {
+    id: "text-to-speech",
+    needsSetup: true,
+    configKeys: [
+      { key: "provider", label: "Provider", placeholder: "elevenlabs or openai" },
+      { key: "apiKey", label: "API Key", placeholder: "Your API key...", secret: true },
+      { key: "voiceId", label: "Voice ID (optional)", placeholder: "default" },
+    ],
+    tools: ["tts_generate"],
+    clientSideOnly: false,
+    systemPrompt: `You have access to a high-quality text-to-speech tool. When the user asks you to read text aloud, narrate, or generate audio, output a tool call block:
+\`\`\`tool_call
+{"tool": "tts_generate", "args": {"text": "Text to speak", "voice": "alloy"}}
+\`\`\`
+The system will generate natural-sounding audio and play it inline.`,
+  },
 };
 
 // ─── Runtime Helpers ───
