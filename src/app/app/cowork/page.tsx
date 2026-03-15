@@ -856,17 +856,44 @@ export default function CoworkPage() {
             ))}
 
             {agents.every((a) => !a.output) && !running && (
-              <div className="text-center py-12 text-muted">
+              <div className="text-center py-12 text-muted max-w-lg mx-auto">
                 <p className="text-4xl mb-4">{mode === "ooda" ? "\uD83D\uDD04" : "\uD83E\uDD1D"}</p>
-                <p className="text-lg mb-2">{mode === "ooda" ? "OODA Loop Autonomous Development" : "Multi-Agent Cowork"}</p>
-                <p className="text-sm">
+                <p className="text-lg font-medium text-foreground mb-2">{mode === "ooda" ? "OODA Loop Autonomous Development" : "Multi-Agent Cowork"}</p>
+                <p className="text-sm mb-4">
                   {mode === "ooda"
                     ? "Set a development goal. Agents will cycle through Observe \u2192 Orient \u2192 Decide \u2192 Act autonomously."
                     : "Define agents, set a goal, and watch them collaborate"}
                 </p>
+
+                <div className="text-left space-y-2 mb-4">
+                  <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2.5">
+                    <span className="text-xs font-bold text-accent-light shrink-0">1.</span>
+                    <span className="text-xs">
+                      {mode === "ooda"
+                        ? <><strong>Configure agents</strong> in the left panel — each gets a name, role, provider, and model</>
+                        : <><strong>Set up your team</strong> in the left panel — Architect, Coder, and Reviewer each have a role</>}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2.5">
+                    <span className="text-xs font-bold text-accent-light shrink-0">2.</span>
+                    <span className="text-xs">
+                      <strong>Type your goal</strong> in the input box below — describe what you want built or solved
+                    </span>
+                  </div>
+                  <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2.5">
+                    <span className="text-xs font-bold text-accent-light shrink-0">3.</span>
+                    <span className="text-xs">
+                      {mode === "ooda"
+                        ? <><strong>Hit Start</strong> — agents will autonomously loop through Observe, Orient, Decide, and Act phases</>
+                        : <><strong>Hit Start</strong> — agents will take turns responding, building on each other&apos;s output</>}
+                    </span>
+                  </div>
+                </div>
+
                 {mode === "ooda" && (
-                  <p className="text-xs text-muted/70 mt-2">Each cycle feeds results into the next for continuous improvement</p>
+                  <p className="text-[10px] text-muted/70">Each cycle feeds results into the next for continuous improvement</p>
                 )}
+                <p className="text-[10px] text-muted/60 mt-1">Set API keys in Settings for each provider your agents use</p>
               </div>
             )}
           </div>

@@ -212,9 +212,24 @@ export default function MemoryPage() {
         {loading && <p className="text-muted text-center py-8">Loading...</p>}
 
         {!loading && tab === "conversations" && conversations.length === 0 && (
-          <div className="text-center py-12 text-muted">
-            <p className="text-lg mb-2">No saved conversations</p>
-            <p className="text-sm">Conversations will auto-save here when you use the chat</p>
+          <div className="text-center py-12 text-muted max-w-md mx-auto">
+            <p className="text-2xl mb-3">{"\u{1F4AC}"}</p>
+            <p className="text-lg font-medium text-foreground mb-1">No Saved Conversations Yet</p>
+            <p className="text-sm mb-4">Your chat history will appear here automatically.</p>
+            <div className="text-left space-y-2">
+              <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2.5">
+                <span className="text-xs font-bold text-accent-light shrink-0">1.</span>
+                <span className="text-xs">Go to <strong>Chat</strong> and start a conversation with any AI model</span>
+              </div>
+              <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2.5">
+                <span className="text-xs font-bold text-accent-light shrink-0">2.</span>
+                <span className="text-xs">Conversations are <strong>auto-saved</strong> and show up in this tab</span>
+              </div>
+              <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2.5">
+                <span className="text-xs font-bold text-accent-light shrink-0">3.</span>
+                <span className="text-xs">You can <strong>view, export as PDF, or delete</strong> any saved conversation</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -333,8 +348,24 @@ export default function MemoryPage() {
             </div>
 
             {memories.length === 0 && (
-              <div className="text-center py-8 text-muted">
-                <p>No memories yet. Add facts, preferences, and context that CPUAGEN should remember.</p>
+              <div className="text-center py-8 text-muted max-w-md mx-auto">
+                <p className="text-2xl mb-2">{"\u{1F9E0}"}</p>
+                <p className="font-medium text-foreground mb-1">No Memories Yet</p>
+                <p className="text-sm mb-3">Memories help the AI remember your preferences and context across sessions.</p>
+                <div className="text-left space-y-1.5">
+                  <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2">
+                    <span className="text-[10px] font-bold text-accent-light shrink-0">1.</span>
+                    <span className="text-[10px]">Type a fact or preference in the box above (e.g., &quot;I prefer TypeScript&quot;)</span>
+                  </div>
+                  <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2">
+                    <span className="text-[10px] font-bold text-accent-light shrink-0">2.</span>
+                    <span className="text-[10px]">Pick a <strong>category</strong> (General, Preference, Project, Context)</span>
+                  </div>
+                  <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2">
+                    <span className="text-[10px] font-bold text-accent-light shrink-0">3.</span>
+                    <span className="text-[10px]">Click <strong>Save</strong> — the AI will use these memories to personalize responses</span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -506,8 +537,11 @@ export default function MemoryPage() {
                   </div>
                 ))}
                 {knowledge.teeps.length === 0 && (
-                  <div className="text-center py-8 text-muted">
-                    <p className="text-sm">No TEEPs cached yet. Start chatting to build the knowledge base.</p>
+                  <div className="text-center py-8 text-muted max-w-sm mx-auto">
+                    <p className="text-2xl mb-2">{"\u{1F4DA}"}</p>
+                    <p className="font-medium text-foreground text-sm mb-1">No TEEPs Cached Yet</p>
+                    <p className="text-xs mb-2">TEEPs (Thermosolve-Enforced Entry Points) are knowledge units the AI builds as you chat.</p>
+                    <p className="text-[10px]">Start a conversation in <strong>Chat</strong> — the knowledge base grows automatically.</p>
                   </div>
                 )}
               </div>
@@ -516,9 +550,11 @@ export default function MemoryPage() {
         )}
 
         {!loading && tab === "knowledge" && !knowledge && (
-          <div className="text-center py-12 text-muted">
-            <p className="text-sm">Unable to load engine knowledge. The enforcement engine may be initializing.</p>
-            <button onClick={loadKnowledge} className="mt-3 px-4 py-2 text-xs bg-accent/10 text-accent-light rounded-lg hover:bg-accent/20">
+          <div className="text-center py-12 text-muted max-w-sm mx-auto">
+            <p className="text-2xl mb-2">{"\u{26A0}\uFE0F"}</p>
+            <p className="text-sm font-medium text-foreground mb-1">Knowledge Engine Loading</p>
+            <p className="text-xs mb-3">The enforcement engine is still initializing. This usually takes a few seconds.</p>
+            <button onClick={loadKnowledge} className="px-4 py-2 text-xs bg-accent/10 text-accent-light rounded-lg hover:bg-accent/20">
               Retry
             </button>
           </div>

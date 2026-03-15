@@ -528,11 +528,64 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
                 </div>
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center text-muted text-sm">
-                <div className="text-center">
-                  <div className="text-3xl mb-2">{"\u{1F4BB}"}</div>
-                  <div>No file open</div>
-                  <div className="text-[10px] mt-1">Create a file or ask the AI to generate code</div>
+              <div className="h-full flex items-center justify-center text-muted overflow-y-auto">
+                <div className="max-w-lg w-full px-6 py-8">
+                  <h2 className="text-lg font-semibold text-foreground mb-1">Welcome to Code Editor</h2>
+                  <p className="text-xs text-muted mb-5">A full coding environment with AI assistance, right in your browser.</p>
+
+                  <div className="space-y-3">
+                    <div className="flex gap-3 items-start bg-surface/50 border border-border rounded-lg p-3">
+                      <span className="text-lg leading-none mt-0.5">1</span>
+                      <div>
+                        <h3 className="text-xs font-medium text-foreground">Create or Open a File</h3>
+                        <p className="text-[11px] text-muted mt-0.5">
+                          Use the <strong>file tree</strong> on the left. Click <strong>New File</strong> and give it a name
+                          like <code className="bg-surface px-1 rounded text-[10px]">index.html</code> or <code className="bg-surface px-1 rounded text-[10px]">app.py</code>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start bg-surface/50 border border-border rounded-lg p-3">
+                      <span className="text-lg leading-none mt-0.5">2</span>
+                      <div>
+                        <h3 className="text-xs font-medium text-foreground">Write Code in the Editor</h3>
+                        <p className="text-[11px] text-muted mt-0.5">
+                          The editor supports <strong>syntax highlighting</strong> for many languages.
+                          Type your code here, or let the AI generate it for you.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start bg-surface/50 border border-border rounded-lg p-3">
+                      <span className="text-lg leading-none mt-0.5">3</span>
+                      <div>
+                        <h3 className="text-xs font-medium text-foreground">Ask AI for Help</h3>
+                        <p className="text-[11px] text-muted mt-0.5">
+                          Use the <strong>AI chat panel</strong> on the right. Try prompts like:
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {["Write a Python hello world", "Build an HTML landing page", "Fix this bug"].map((p) => (
+                            <span key={p} className="px-2 py-0.5 text-[10px] rounded border border-border bg-surface text-muted">{p}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start bg-surface/50 border border-border rounded-lg p-3">
+                      <span className="text-lg leading-none mt-0.5">4</span>
+                      <div>
+                        <h3 className="text-xs font-medium text-foreground">Run & See Output Below</h3>
+                        <p className="text-[11px] text-muted mt-0.5">
+                          The <strong>Terminal panel</strong> below shows execution results.
+                          Use <strong>Diff view</strong> to compare AI-suggested changes before applying.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-muted/60 mt-4 text-center">
+                    Files are saved in your browser&apos;s local storage.
+                  </p>
                 </div>
               </div>
             )}

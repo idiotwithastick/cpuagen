@@ -276,14 +276,31 @@ export default function AgentPage() {
 
           {/* Empty state */}
           {steps.length === 0 && !output && !running && (
-            <div className="text-center py-16 text-muted">
+            <div className="text-center py-12 text-muted max-w-lg mx-auto px-4">
               <p className="text-2xl mb-3">{"\u{1F916}"}</p>
-              <p className="text-sm mb-2">Multi-Turn Agent Loop</p>
-              <p className="text-[11px] mb-4">
+              <p className="text-sm font-medium text-foreground mb-1">Multi-Turn Agent Loop</p>
+              <p className="text-[11px] mb-5">
                 Give the agent a multi-step task. It will plan, use tools, observe results,
                 and iterate until it has a complete answer.
               </p>
-              <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
+
+              <div className="text-left space-y-2 mb-5">
+                <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2.5">
+                  <span className="text-[11px] font-bold text-accent-light shrink-0">1.</span>
+                  <span className="text-[11px]"><strong>Describe your task</strong> in the input box below — be specific about what you need</span>
+                </div>
+                <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2.5">
+                  <span className="text-[11px] font-bold text-accent-light shrink-0">2.</span>
+                  <span className="text-[11px]"><strong>The agent will use tools</strong> automatically: web search, calculator, code execution, file generation, URL fetching, and date/time</span>
+                </div>
+                <div className="flex gap-2 items-start bg-surface/50 border border-border rounded-lg p-2.5">
+                  <span className="text-[11px] font-bold text-accent-light shrink-0">3.</span>
+                  <span className="text-[11px]"><strong>Watch it work</strong> — each step shows the tool used, the result, and the agent&apos;s reasoning</span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-muted mb-3">Try an example:</p>
+              <div className="flex flex-wrap justify-center gap-2">
                 {[
                   { label: "Research", q: "Search the web for the latest news about AI safety research and summarize the top 3 findings" },
                   { label: "Calculate", q: "What is the compound interest on $10,000 at 7% annual rate over 30 years, compounded monthly? Show your work." },
@@ -299,6 +316,8 @@ export default function AgentPage() {
                   </button>
                 ))}
               </div>
+
+              <p className="text-[9px] text-muted/60 mt-4">Select provider, model &amp; max iterations in the header. Set API keys in Settings.</p>
             </div>
           )}
         </div>

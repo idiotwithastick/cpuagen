@@ -162,10 +162,16 @@ export default function DashboardPage() {
   if (error || !snapshot) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-danger text-sm mb-2">Engine state unavailable</p>
-          <p className="text-xs text-muted">{error}</p>
-          <button onClick={fetchSnapshot} className="mt-4 px-4 py-2 text-xs bg-accent/10 text-accent-light rounded-lg hover:bg-accent/20">
+        <div className="text-center max-w-sm">
+          <p className="text-2xl mb-3">{"\u{1F4CA}"}</p>
+          <p className="text-danger text-sm font-medium mb-1">Engine State Unavailable</p>
+          <p className="text-xs text-muted mb-3">{error || "The physics engine hasn\u0027t responded yet."}</p>
+          <p className="text-[10px] text-muted/70 mb-4">
+            The Dashboard shows real-time metrics from the SSD-RCI engine —
+            entropy, coherence, Fisher weights, TEEPs, and more.
+            It updates automatically once the engine is running.
+          </p>
+          <button onClick={fetchSnapshot} className="px-4 py-2 text-xs bg-accent/10 text-accent-light rounded-lg hover:bg-accent/20">
             Retry
           </button>
         </div>

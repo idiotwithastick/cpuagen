@@ -123,11 +123,26 @@ function ChatPanel({
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {panelMessages.length === 0 && (
-          <div className="flex items-center justify-center h-full text-muted text-xs text-center">
-            <div>
+          <div className="flex items-center justify-center h-full text-muted text-xs text-center px-4">
+            <div className="max-w-xs">
               <div className="text-2xl mb-2">{side === "left" ? "\u{1F4AC}" : "\u{1F5E8}\uFE0F"}</div>
-              <div>Send a message to start</div>
-              <div className="text-[10px] mt-1">Select your model above, then chat</div>
+              <div className="font-medium text-foreground mb-1">{side === "left" ? "Left Panel" : "Right Panel"}</div>
+              <div className="text-[11px] mb-2">Compare AI models side by side</div>
+              <div className="space-y-1.5 text-left">
+                <div className="flex gap-2 items-start">
+                  <span className="text-[10px] font-bold text-accent-light shrink-0">1.</span>
+                  <span className="text-[10px]">Pick a <strong>provider &amp; model</strong> from the dropdown above</span>
+                </div>
+                <div className="flex gap-2 items-start">
+                  <span className="text-[10px] font-bold text-accent-light shrink-0">2.</span>
+                  <span className="text-[10px]">Type your question in the box below</span>
+                </div>
+                <div className="flex gap-2 items-start">
+                  <span className="text-[10px] font-bold text-accent-light shrink-0">3.</span>
+                  <span className="text-[10px]">Both panels answer the <strong>same prompt</strong> so you can compare quality, speed, and style</span>
+                </div>
+              </div>
+              <p className="text-[9px] text-muted/60 mt-2">Set API keys in Settings for each provider you want to use</p>
             </div>
           </div>
         )}
