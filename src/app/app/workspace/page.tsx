@@ -313,11 +313,83 @@ export default function WorkspacePage() {
                 }}
               />
             ) : activeTab === "editor" && !activeFile ? (
-              <div className="flex items-center justify-center h-full text-muted">
-                <div className="text-center">
-                  <p className="text-2xl mb-3">{"\u{1F4C1}"}</p>
-                  <p className="text-sm mb-1">No file open</p>
-                  <p className="text-xs">Select a file from the sidebar or create a new one</p>
+              <div className="flex items-center justify-center h-full text-muted overflow-y-auto">
+                <div className="max-w-lg w-full px-6 py-8">
+                  <div className="text-center mb-6">
+                    <p className="text-3xl mb-2">{"\u{1F4C1}"}</p>
+                    <h2 className="text-lg font-semibold text-foreground mb-1">Welcome to Workspace</h2>
+                    <p className="text-xs text-muted">Your virtual coding environment with AI assistance</p>
+                  </div>
+
+                  <div className="space-y-3 mb-6">
+                    <div className="bg-surface border border-border rounded-lg p-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-base mt-0.5">{"\u{1F4C4}"}</span>
+                        <div>
+                          <h3 className="text-xs font-semibold text-foreground mb-0.5">1. Create or Open a File</h3>
+                          <p className="text-[11px] text-muted leading-relaxed">
+                            Use the <strong>file tree on the left</strong> to browse your virtual files. Click the <strong>+</strong> button
+                            at the top of the sidebar to create a new file. Give it a name with an extension (like <code className="text-accent-light bg-accent/10 px-1 rounded">notes.md</code> or <code className="text-accent-light bg-accent/10 px-1 rounded">script.py</code>).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-surface border border-border rounded-lg p-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-base mt-0.5">{"\u270F\uFE0F"}</span>
+                        <div>
+                          <h3 className="text-xs font-semibold text-foreground mb-0.5">2. Edit with the Code Editor</h3>
+                          <p className="text-[11px] text-muted leading-relaxed">
+                            Click any file to open it in the <strong>Monaco code editor</strong> (same one used in VS Code).
+                            It auto-detects the language from the file extension. Press <kbd className="px-1 py-0.5 text-[10px] bg-surface-light rounded border border-border">Ctrl+S</kbd> to save your changes.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-surface border border-border rounded-lg p-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-base mt-0.5">{"\uD83E\uDD16"}</span>
+                        <div>
+                          <h3 className="text-xs font-semibold text-foreground mb-0.5">3. Ask AI for Help</h3>
+                          <p className="text-[11px] text-muted leading-relaxed">
+                            Click the <strong>AI Chat</strong> tab in the top-right corner. The AI can see all your open files and can
+                            <strong> create new files</strong> or <strong>modify existing ones</strong> directly. Just describe what you want:
+                          </p>
+                          <div className="mt-1.5 space-y-1">
+                            {[
+                              "\"Create a Python script that sorts a CSV file\"",
+                              "\"Add error handling to my script.js\"",
+                              "\"Explain what this code does\"",
+                            ].map((ex) => (
+                              <p key={ex} className="text-[10px] text-accent-light/70 font-mono italic">{ex}</p>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-surface border border-border rounded-lg p-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-base mt-0.5">{"\uD83D\uDC41\uFE0F"}</span>
+                        <div>
+                          <h3 className="text-xs font-semibold text-foreground mb-0.5">4. Preview Your Work</h3>
+                          <p className="text-[11px] text-muted leading-relaxed">
+                            For HTML and SVG files, a <strong>Preview</strong> tab appears automatically so you can see your page rendered live.
+                            Markdown files also get a formatted preview.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-accent/5 border border-accent/20 rounded-lg p-3 text-center">
+                    <p className="text-[11px] text-accent-light/80">
+                      {"\uD83D\uDCA1"} <strong>Tip:</strong> Everything stays in your browser. Your files are saved to local storage
+                      and persist between sessions. No account or server needed.
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : activeTab === "preview" ? (
