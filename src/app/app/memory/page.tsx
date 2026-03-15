@@ -17,13 +17,45 @@ interface ConversationSummary {
   message_count: number;
 }
 
+interface TeepSummary {
+  id: string;
+  sig: string;
+  allSafe: boolean;
+  content: string;
+  hits: number;
+  semanticMass: number;
+  resonanceStrength: number;
+  created: number;
+}
+
+interface EngineKnowledge {
+  version: string;
+  teepCount: number;
+  cacheHits: number;
+  cacheMisses: number;
+  hitRate: string;
+  morphicFieldStrength: number;
+  totalResonanceEvents: number;
+  teeps: TeepSummary[];
+}
+
+interface EngineMetrics {
+  manifold?: { totalTeeps: number; coveredBasins: number; frontierSize: number; coverage: number };
+  ricci?: { scalar: number; meanSectional: number; dimensions: number };
+  metrics?: { totalRequests: number; totalPassed: number; totalBlocked: number; barrierFailCounts: Record<string, number> };
+  fisher?: { coherence: number; dominantDimension: string; weights: Record<string, number> };
+}
+
 export default function MemoryPage() {
-  const [tab, setTab] = useState<"conversations" | "memories">("conversations");
+  const [tab, setTab] = useState<"conversations" | "memories" | "knowledge">("conversations");
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newMemory, setNewMemory] = useState("");
   const [newCategory, setNewCategory] = useState("general");
+  const [knowledge, setKnowledge] = useState<EngineKnowledge | null>(null);
+  const [engineMetrics, setEngineMetrics] = useState<EngineMetrics | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadConversations = useCallback(async () => {
     setLoading(true);
@@ -45,10 +77,43 @@ export default function MemoryPage() {
     setLoading(false);
   }, []);
 
+  const loadKnowledge = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/teep");
+      const data = await res.json();
+      if (data.ok) {
+        const s = data.snapshot;
+        setKnowledge({
+          version: s.version,
+          teepCount: s.teeps.length,
+          cacheHits: s.counters.cacheHits,
+          cacheMisses: s.counters.cacheMisses,
+          hitRate: (s.counters.cacheHits + s.counters.cacheMisses) > 0
+            ? ((s.counters.cacheHits / (s.counters.cacheHits + s.counters.cacheMisses)) * 100).toFixed(1)
+            : "0.0",
+          morphicFieldStrength: s.morphicFieldStrength,
+          totalResonanceEvents: s.totalResonanceEvents,
+          teeps: s.teeps,
+        });
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  const loadEngineMetrics = useCallback(async () => {
+    try {
+      const res = await fetch("/api/engine");
+      const data = await res.json();
+      if (data.ok) setEngineMetrics(data);
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     if (tab === "conversations") loadConversations();
-    else loadMemories();
-  }, [tab, loadConversations, loadMemories]);
+    else if (tab === "memories") loadMemories();
+    else { loadKnowledge(); loadEngineMetrics(); }
+  }, [tab, loadConversations, loadMemories, loadKnowledge, loadEngineMetrics]);
 
   const addMemory = async () => {
     if (!newMemory.trim()) return;
@@ -102,7 +167,7 @@ export default function MemoryPage() {
       </div>
 
       <div className="flex gap-2 px-6 pt-4">
-        {(["conversations", "memories"] as const).map((t) => (
+        {(["conversations", "memories", "knowledge"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -112,10 +177,22 @@ export default function MemoryPage() {
                 : "text-muted hover:text-foreground hover:bg-surface-light"
             }`}
           >
-            {t === "conversations" ? "Conversations" : "Memories"}
+            {t === "conversations" ? "Conversations" : t === "memories" ? "Memories" : "Knowledge Base"}
           </button>
         ))}
       </div>
+
+      {/* Search bar */}
+      {(tab === "conversations" || tab === "memories") && (
+        <div className="px-6 pt-3">
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={tab === "conversations" ? "Search conversations by title..." : "Search memories by content..."}
+            className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-foreground placeholder:text-muted focus:border-accent/50 focus:outline-none"
+          />
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-6 space-y-3">
         {loading && <p className="text-muted text-center py-8">Loading...</p>}
@@ -127,7 +204,7 @@ export default function MemoryPage() {
           </div>
         )}
 
-        {!loading && tab === "conversations" && conversations.map((c) => (
+        {!loading && tab === "conversations" && conversations.filter((c) => !searchQuery || c.title.toLowerCase().includes(searchQuery.toLowerCase())).map((c) => (
           <div key={c.id} className="bg-surface border border-border rounded-lg p-4 flex items-center justify-between">
             <div>
               <h3 className="font-medium text-sm">{c.title}</h3>
@@ -201,7 +278,7 @@ export default function MemoryPage() {
               </div>
             )}
 
-            {memories.map((m) => (
+            {memories.filter((m) => !searchQuery || m.content.toLowerCase().includes(searchQuery.toLowerCase()) || m.category.toLowerCase().includes(searchQuery.toLowerCase())).map((m) => (
               <div key={m.id} className="bg-surface border border-border rounded-lg p-4 flex items-start justify-between gap-3">
                 <div className="flex-1">
                   <span className="inline-block px-2 py-0.5 text-[10px] font-mono rounded bg-accent/10 text-accent-light border border-accent/20 mb-2">
@@ -221,6 +298,170 @@ export default function MemoryPage() {
               </div>
             ))}
           </>
+        )}
+
+        {!loading && tab === "knowledge" && knowledge && (
+          <>
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-surface border border-border rounded-lg p-3 text-center">
+                <div className="text-lg font-bold font-mono text-accent-light">{knowledge.teepCount}</div>
+                <div className="text-[10px] text-muted font-mono uppercase">TEEPs Loaded</div>
+              </div>
+              <div className="bg-surface border border-border rounded-lg p-3 text-center">
+                <div className="text-lg font-bold font-mono text-success">{knowledge.hitRate}%</div>
+                <div className="text-[10px] text-muted font-mono uppercase">Cache Hit Rate</div>
+              </div>
+              <div className="bg-surface border border-border rounded-lg p-3 text-center">
+                <div className="text-lg font-bold font-mono text-warning">{(knowledge.morphicFieldStrength ?? 0).toFixed(3)}</div>
+                <div className="text-[10px] text-muted font-mono uppercase">Morphic Field</div>
+              </div>
+              <div className="bg-surface border border-border rounded-lg p-3 text-center">
+                <div className="text-lg font-bold font-mono text-accent-light">{knowledge.totalResonanceEvents}</div>
+                <div className="text-[10px] text-muted font-mono uppercase">Resonance Events</div>
+              </div>
+            </div>
+
+            {/* Enforcement Metrics */}
+            {engineMetrics?.metrics && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-surface border border-border rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono text-foreground">{engineMetrics.metrics.totalRequests}</div>
+                  <div className="text-[10px] text-muted font-mono uppercase">Total Requests</div>
+                </div>
+                <div className="bg-surface border border-border rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono text-success">{engineMetrics.metrics.totalPassed}</div>
+                  <div className="text-[10px] text-muted font-mono uppercase">Passed</div>
+                </div>
+                <div className="bg-surface border border-border rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono text-danger">{engineMetrics.metrics.totalBlocked}</div>
+                  <div className="text-[10px] text-muted font-mono uppercase">Blocked</div>
+                </div>
+                <div className="bg-surface border border-border rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono text-accent-light">
+                    {engineMetrics.ricci ? (engineMetrics.ricci.scalar ?? 0).toFixed(4) : "—"}
+                  </div>
+                  <div className="text-[10px] text-muted font-mono uppercase">Ricci Curvature</div>
+                </div>
+              </div>
+            )}
+
+            {/* Manifold & Fisher */}
+            {(engineMetrics?.manifold || engineMetrics?.fisher) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {engineMetrics.manifold && (
+                  <div className="bg-surface border border-border rounded-lg p-3">
+                    <div className="text-[10px] font-mono text-muted uppercase mb-2">Manifold Coverage</div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <div className="text-sm font-mono font-bold text-accent-light">{engineMetrics.manifold.coveredBasins}</div>
+                        <div className="text-[9px] text-muted">Basins</div>
+                      </div>
+                      <div>
+                        <div className="text-sm font-mono font-bold text-warning">{engineMetrics.manifold.frontierSize}</div>
+                        <div className="text-[9px] text-muted">Frontier</div>
+                      </div>
+                      <div>
+                        <div className="text-sm font-mono font-bold text-success">{((engineMetrics.manifold.coverage ?? 0) * 100).toFixed(1)}%</div>
+                        <div className="text-[9px] text-muted">Coverage</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {engineMetrics.fisher && (
+                  <div className="bg-surface border border-border rounded-lg p-3">
+                    <div className="text-[10px] font-mono text-muted uppercase mb-2">Fisher Geometry</div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs font-mono">
+                        <span className="text-muted">Coherence</span>
+                        <span className="text-accent-light">{(engineMetrics.fisher.coherence ?? 0).toFixed(4)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-mono">
+                        <span className="text-muted">Dominant</span>
+                        <span className="text-warning">{engineMetrics.fisher.dominantDimension ?? "—"}</span>
+                      </div>
+                      {Object.entries(engineMetrics.fisher.weights).slice(0, 4).map(([dim, w]) => (
+                        <div key={dim} className="flex items-center gap-2">
+                          <span className="text-[9px] font-mono text-muted w-16 truncate">{dim}</span>
+                          <div className="flex-1 h-1.5 bg-background rounded-full overflow-hidden">
+                            <div className="h-full bg-accent/60 rounded-full" style={{ width: `${Math.min(w * 100, 100)}%` }} />
+                          </div>
+                          <span className="text-[9px] font-mono text-muted w-8 text-right">{(Number(w) || 0).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Barrier Fail History */}
+            {engineMetrics?.metrics && Object.keys(engineMetrics.metrics.barrierFailCounts).length > 0 && (
+              <div className="bg-surface border border-danger/20 rounded-lg p-3">
+                <div className="text-[10px] font-mono text-danger/80 uppercase mb-2">Barrier Failure History</div>
+                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                  {Object.entries(engineMetrics.metrics.barrierFailCounts).map(([barrier, count]) => (
+                    <div key={barrier} className="text-center p-1.5 rounded bg-danger/5 border border-danger/10">
+                      <div className="text-sm font-mono font-bold text-danger">{count}</div>
+                      <div className="text-[9px] font-mono text-muted">{barrier}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="bg-surface/50 border border-border rounded-lg p-4">
+              <p className="text-xs text-muted leading-relaxed">
+                The Knowledge Base shows the SSD-RCI enforcement engine&apos;s learned state.
+                Every query is solved into a thermodynamic basin state (TEEP) and cached.
+                The enforcement pipeline validates all requests through 9 Control Barrier Functions.
+                The morphic field strengthens as the system accumulates resonance events.
+              </p>
+            </div>
+
+            {/* TEEP list */}
+            <div>
+              <h3 className="text-sm font-medium mb-3">Top TEEPs by Semantic Mass</h3>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search TEEPs by content or ID..."
+                className="w-full px-3 py-2 mb-3 bg-surface border border-border rounded-lg text-sm text-foreground placeholder:text-muted focus:border-accent/50 focus:outline-none"
+              />
+              <div className="space-y-2">
+                {knowledge.teeps.filter((t) => !searchQuery || t.content.toLowerCase().includes(searchQuery.toLowerCase()) || t.id.toLowerCase().includes(searchQuery.toLowerCase())).map((t) => (
+                  <div key={t.id} className="bg-surface border border-border rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`w-2 h-2 rounded-full ${t.allSafe ? "bg-success" : "bg-danger"}`} />
+                      <span className="text-[10px] font-mono text-accent-light">{t.id}</span>
+                      <span className="text-[10px] font-mono text-muted ml-auto">
+                        mass: {(t.semanticMass ?? 0).toFixed(2)} | {t.hits} hits | resonance: {(t.resonanceStrength ?? 0).toFixed(3)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground">{t.content.slice(0, 200)}{t.content.length > 200 ? "..." : ""}</p>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <span className="text-[9px] text-muted font-mono">{new Date(t.created).toLocaleString()}</span>
+                      <span className="text-[9px] font-mono text-accent-light/60">{t.sig}</span>
+                    </div>
+                  </div>
+                ))}
+                {knowledge.teeps.length === 0 && (
+                  <div className="text-center py-8 text-muted">
+                    <p className="text-sm">No TEEPs cached yet. Start chatting to build the knowledge base.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {!loading && tab === "knowledge" && !knowledge && (
+          <div className="text-center py-12 text-muted">
+            <p className="text-sm">Unable to load engine knowledge. The enforcement engine may be initializing.</p>
+            <button onClick={loadKnowledge} className="mt-3 px-4 py-2 text-xs bg-accent/10 text-accent-light rounded-lg hover:bg-accent/20">
+              Retry
+            </button>
+          </div>
         )}
       </div>
     </div>

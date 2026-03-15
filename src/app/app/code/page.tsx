@@ -1,9 +1,27 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import type { EnforcementResult, Settings, ApiKeys } from "@/lib/types";
 import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS } from "@/lib/types";
+import { withAdminToken } from "@/lib/admin";
 import { getCodeContext } from "@/lib/system-context";
+
+const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.default), { ssr: false });
+
+/* ─── Monaco language mapper ─── */
+function monacoLang(lang: string): string {
+  const map: Record<string, string> = {
+    typescript: "typescript", tsx: "typescript", javascript: "javascript", jsx: "javascript",
+    python: "python", rust: "rust", go: "go", java: "java",
+    html: "html", css: "css", scss: "scss", json: "json",
+    yaml: "yaml", toml: "ini", markdown: "markdown", text: "plaintext",
+    sql: "sql", bash: "shell", batch: "bat", powershell: "powershell",
+    xml: "xml", svg: "xml", c: "c", cpp: "cpp", ruby: "ruby", php: "php",
+    swift: "swift", kotlin: "kotlin", scala: "scala", dockerfile: "dockerfile",
+  };
+  return map[lang] || "plaintext";
+}
 
 /* ─── Types ─── */
 interface VirtualFile {
@@ -166,7 +184,7 @@ export default function CodePage() {
   const [terminal, setTerminal] = useState<TerminalEntry[]>([{
     id: "welcome",
     type: "system",
-    content: "CPUAGEN Code — Agentic coding with enforcement.\nEvery AI response passes through 8 independent safety barriers.\nType an instruction below to start coding.",
+    content: "CPUAGEN Code — Agentic coding with enforcement.\nEvery AI response passes through 9 independent safety barriers.\nType an instruction below to start coding.",
     timestamp: Date.now(),
   }]);
   const [input, setInput] = useState("");
@@ -314,7 +332,7 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(withAdminToken({
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: fullPrompt },
@@ -322,7 +340,7 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
           provider,
           model,
           apiKey,
-        }),
+        })),
         signal: controller.signal,
       });
 
@@ -489,13 +507,25 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
                   <span>{activeFile.name} — {activeFile.language}</span>
                   <span>{activeFile.content.split("\n").length} lines</span>
                 </div>
-                <textarea
-                  value={activeFile.content}
-                  onChange={(e) => updateFileContent(activeFile.id, e.target.value)}
-                  className="flex-1 w-full bg-background text-foreground font-mono text-sm p-4 resize-none outline-none leading-relaxed"
-                  spellCheck={false}
-                  style={{ tabSize: 2 }}
-                />
+                <div className="flex-1 min-h-0">
+                  <MonacoEditor
+                    height="100%"
+                    language={monacoLang(activeFile.language)}
+                    value={activeFile.content}
+                    onChange={(v) => updateFileContent(activeFile.id, v || "")}
+                    theme="vs-dark"
+                    options={{
+                      fontSize: 13,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      wordWrap: "on",
+                      lineNumbers: "on",
+                      renderLineHighlight: "line",
+                      padding: { top: 8 },
+                      automaticLayout: true,
+                    }}
+                  />
+                </div>
               </div>
             ) : (
               <div className="h-full flex items-center justify-center text-muted text-sm">

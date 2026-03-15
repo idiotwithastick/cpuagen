@@ -47,7 +47,7 @@ const state: LockoutState = {
 };
 
 const SITE_FAIL_LIMIT = 20;
-const ADMIN_FAIL_LIMIT = 3;
+const ADMIN_FAIL_LIMIT = 10;
 
 function addEvent(event: Omit<SecurityEvent, "timestamp">) {
   state.events.push({ ...event, timestamp: Date.now() });
@@ -293,4 +293,66 @@ export function getEarlyAccessStats(): { total: number; granted: number; pending
     if (entry.passcodeUsed) redeemed++;
   }
   return { total: earlyAccessLedger.size, granted, pending, redeemed };
+}
+
+// ========================================================================
+// FEEDBACK / BUG REPORTS — Stored in-memory, visible in admin dashboard
+// ========================================================================
+
+interface FeedbackEntry {
+  id: string;
+  type: "bug" | "suggestion";
+  subject: string;
+  description: string;
+  email?: string;
+  page?: string;
+  ip: string;
+  timestamp: number;
+  status: "new" | "reviewed" | "resolved" | "dismissed";
+}
+
+const feedbackStore: FeedbackEntry[] = [];
+
+export function saveFeedback(entry: Omit<FeedbackEntry, "id" | "timestamp" | "status">): FeedbackEntry {
+  const fb: FeedbackEntry = {
+    ...entry,
+    id: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: Date.now(),
+    status: "new",
+  };
+  feedbackStore.unshift(fb); // newest first
+  // Keep last 500
+  if (feedbackStore.length > 500) feedbackStore.length = 500;
+  addEvent({ type: "admin_action", ip: entry.ip, details: `Feedback submitted: [${entry.type}] ${entry.subject.slice(0, 60)}` });
+  return fb;
+}
+
+export function getFeedbackList(): FeedbackEntry[] {
+  return [...feedbackStore];
+}
+
+export function getFeedbackStats(): { total: number; bugs: number; suggestions: number; new: number; reviewed: number; resolved: number } {
+  let bugs = 0, suggestions = 0, newCount = 0, reviewed = 0, resolved = 0;
+  for (const fb of feedbackStore) {
+    if (fb.type === "bug") bugs++;
+    else suggestions++;
+    if (fb.status === "new") newCount++;
+    else if (fb.status === "reviewed") reviewed++;
+    else if (fb.status === "resolved") resolved++;
+  }
+  return { total: feedbackStore.length, bugs, suggestions, new: newCount, reviewed, resolved };
+}
+
+export function updateFeedbackStatus(id: string, status: FeedbackEntry["status"]): boolean {
+  const fb = feedbackStore.find((f) => f.id === id);
+  if (!fb) return false;
+  fb.status = status;
+  return true;
+}
+
+export function deleteFeedback(id: string): boolean {
+  const idx = feedbackStore.findIndex((f) => f.id === id);
+  if (idx === -1) return false;
+  feedbackStore.splice(idx, 1);
+  return true;
 }

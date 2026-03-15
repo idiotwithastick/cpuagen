@@ -1,14 +1,47 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS } from "@/lib/types";
 import type { Provider, Settings, ApiKeys } from "@/lib/types";
+import { withAdminToken } from "@/lib/admin";
+
+interface EnforcementInfo {
+  metrics?: {
+    totalRequests: number;
+    totalPassed: number;
+    totalBlocked: number;
+    barrierFailCounts: Record<string, number>;
+  };
+  manifold?: { totalTeeps: number; coveredBasins: number; coverage: number };
+  fisher?: { coherence: number; dominantDimension: string };
+}
+
+const CBF_THRESHOLDS = [
+  { name: "BNR", label: "Truth Alignment", constraint: "I_truth >= 0.30" },
+  { name: "BNN", label: "Naturality", constraint: "nat >= 0.20" },
+  { name: "BNA", label: "Energy Bound", constraint: "E <= 100,000" },
+  { name: "TSE", label: "Thermal Stability", constraint: "|beta_T - 1| < 0.50" },
+  { name: "PCD", label: "Coherence", constraint: "phi_coh >= 0.10" },
+  { name: "OGP", label: "Output Guard", constraint: "errors <= 100" },
+  { name: "ECM", label: "Quality Metric", constraint: "Q <= 500" },
+  { name: "SPC", label: "Synergy", constraint: "sigma >= 0.50" },
+  { name: "FEP", label: "Free Energy", constraint: "F <= 50,000" },
+];
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [enforcement, setEnforcement] = useState<EnforcementInfo | null>(null);
+
+  const loadEnforcement = useCallback(async () => {
+    try {
+      const res = await fetch("/api/engine");
+      const data = await res.json();
+      if (data.ok) setEnforcement(data);
+    } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
     try {
@@ -20,7 +53,8 @@ export default function SettingsPage() {
     } catch {
       // ignore
     }
-  }, []);
+    loadEnforcement();
+  }, [loadEnforcement]);
 
   const providerConfig = PROVIDERS.find((p) => p.id === settings.activeProvider);
   const isDemo = providerConfig?.noKeyRequired;
@@ -61,12 +95,12 @@ export default function SettingsPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(withAdminToken({
           messages: [{ role: "user", content: "Say 'CPUAGEN connected' in exactly 2 words." }],
           provider: settings.activeProvider,
           apiKey: activeKey,
           model: settings.activeModel,
-        }),
+        })),
       });
 
       if (!res.ok) {
@@ -319,6 +353,92 @@ export default function SettingsPage() {
             <li>Response passes through the same barrier validation</li>
             <li>Validated answer is cached and delivered with enforcement metadata</li>
           </ol>
+        </div>
+
+        {/* Enforcement Transparency */}
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-4">Enforcement Engine</h2>
+
+          {/* CBF Thresholds */}
+          <div className="p-4 rounded-xl bg-surface border border-border mb-4">
+            <h3 className="text-xs font-mono text-muted uppercase tracking-wider mb-3">
+              Control Barrier Functions (9 Barriers)
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              {CBF_THRESHOLDS.map((b) => (
+                <div
+                  key={b.name}
+                  className="p-2 rounded-lg bg-background border border-border text-center"
+                >
+                  <div className="text-xs font-mono font-bold text-success">{b.name}</div>
+                  <div className="text-[9px] text-muted mt-0.5">{b.label}</div>
+                  <div className="text-[8px] font-mono text-accent-light/60 mt-0.5">{b.constraint}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted mt-2">
+              All 9 barriers must pass for every request. These thresholds are immutable.
+            </p>
+          </div>
+
+          {/* Live Stats */}
+          {enforcement?.metrics && (
+            <div className="p-4 rounded-xl bg-surface border border-border mb-4">
+              <h3 className="text-xs font-mono text-muted uppercase tracking-wider mb-3">
+                Live Enforcement Stats
+              </h3>
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div className="text-center">
+                  <div className="text-lg font-bold font-mono text-foreground">{enforcement.metrics.totalRequests}</div>
+                  <div className="text-[10px] text-muted">Requests</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold font-mono text-success">{enforcement.metrics.totalPassed}</div>
+                  <div className="text-[10px] text-muted">Passed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold font-mono text-danger">{enforcement.metrics.totalBlocked}</div>
+                  <div className="text-[10px] text-muted">Blocked</div>
+                </div>
+              </div>
+              {enforcement.metrics.totalRequests > 0 && (
+                <div className="h-2 bg-background rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-success rounded-full transition-all"
+                    style={{ width: `${(enforcement.metrics.totalPassed / enforcement.metrics.totalRequests) * 100}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Manifold + Fisher */}
+          {(enforcement?.manifold || enforcement?.fisher) && (
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {enforcement.manifold && (
+                <div className="p-3 rounded-xl bg-surface border border-border text-center">
+                  <div className="text-sm font-bold font-mono text-accent-light">
+                    {enforcement.manifold.totalTeeps}
+                  </div>
+                  <div className="text-[10px] text-muted">TEEPs Cached</div>
+                  <div className="text-[9px] font-mono text-muted/60 mt-0.5">
+                    {((enforcement.manifold.coverage ?? 0) * 100).toFixed(1)}% manifold coverage
+                  </div>
+                </div>
+              )}
+              {enforcement.fisher && (
+                <div className="p-3 rounded-xl bg-surface border border-border text-center">
+                  <div className="text-sm font-bold font-mono text-warning">
+                    {(enforcement.fisher.coherence ?? 0).toFixed(4)}
+                  </div>
+                  <div className="text-[10px] text-muted">Fisher Coherence</div>
+                  <div className="text-[9px] font-mono text-muted/60 mt-0.5">
+                    dominant: {enforcement.fisher.dominantDimension ?? "—"}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

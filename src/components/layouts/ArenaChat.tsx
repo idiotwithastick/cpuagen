@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { Settings, ApiKeys, EnforcementResult } from "@/lib/types";
 import { PROVIDERS } from "@/lib/types";
+import { withAdminToken } from "@/lib/admin";
 import { getCoreContext } from "@/lib/system-context";
 
 /* ─── Types ─── */
@@ -220,7 +221,7 @@ export default function ArenaChat({ settings, onCodeGenerated }: ArenaChatProps)
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(withAdminToken({
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: prompt },
@@ -228,7 +229,7 @@ export default function ArenaChat({ settings, onCodeGenerated }: ArenaChatProps)
           provider,
           model,
           apiKey,
-        }),
+        })),
         signal: controller.signal,
       });
 

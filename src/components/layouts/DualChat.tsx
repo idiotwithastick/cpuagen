@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types";
 import { PROVIDERS } from "@/lib/types";
 import { getDualContext } from "@/lib/system-context";
+import { withAdminToken } from "@/lib/admin";
 
 /* ─── Props ─── */
 interface DualChatProps {
@@ -398,7 +399,7 @@ export default function DualChat({ settings, onCodeGenerated }: DualChatProps) {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: JSON.stringify(withAdminToken({
             messages: [
               { role: "system", content: systemPrompt },
               ...contextMsgs,
@@ -406,7 +407,7 @@ export default function DualChat({ settings, onCodeGenerated }: DualChatProps) {
             provider,
             model,
             apiKey,
-          }),
+          })),
           signal: controller.signal,
         });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface Extension {
   id: string;
@@ -10,29 +10,69 @@ interface Extension {
   icon: string;
   installed: boolean;
   author: string;
+  capabilities?: string[];
 }
 
-const EXTENSIONS: Extension[] = [
-  { id: "web-search", name: "Web Search", description: "Search the web and include results in conversations", category: "Tools", icon: "🔍", installed: true, author: "CPUAGEN" },
-  { id: "code-interpreter", name: "Code Interpreter", description: "Execute Python, JavaScript, and TypeScript in a sandboxed environment", category: "Tools", icon: "⚡", installed: true, author: "CPUAGEN" },
-  { id: "image-gen", name: "Image Generation", description: "Generate images from text descriptions using DALL-E or Stable Diffusion", category: "Creative", icon: "🎨", installed: false, author: "CPUAGEN" },
-  { id: "github", name: "GitHub Integration", description: "Browse repos, create issues, manage PRs directly from chat", category: "Developer", icon: "🐙", installed: false, author: "Community" },
-  { id: "slack", name: "Slack Connector", description: "Send messages and read channels from within CPUAGEN", category: "Communication", icon: "💬", installed: false, author: "Community" },
-  { id: "notion", name: "Notion Sync", description: "Read and write to Notion databases and pages", category: "Productivity", icon: "📝", installed: false, author: "Community" },
-  { id: "calendar", name: "Calendar Assistant", description: "Manage Google Calendar events and scheduling", category: "Productivity", icon: "📅", installed: false, author: "Community" },
-  { id: "data-viz", name: "Data Visualization", description: "Create charts, graphs, and dashboards from data", category: "Analytics", icon: "📊", installed: false, author: "CPUAGEN" },
-  { id: "voice", name: "Voice Input/Output", description: "Speak to CPUAGEN and hear responses with text-to-speech", category: "Accessibility", icon: "🎤", installed: false, author: "CPUAGEN" },
-  { id: "mcp-server", name: "MCP Server Bridge", description: "Connect to any MCP-compatible tool server for extended capabilities", category: "Developer", icon: "🔌", installed: false, author: "CPUAGEN" },
-  { id: "pdf-tools", name: "PDF Tools Pro", description: "Advanced PDF manipulation — merge, split, sign, watermark", category: "Tools", icon: "📄", installed: true, author: "CPUAGEN" },
-  { id: "db-explorer", name: "Database Explorer", description: "Connect to PostgreSQL, MySQL, SQLite and query from chat", category: "Developer", icon: "🗄️", installed: false, author: "Community" },
+const STORAGE_KEY = "cpuagen-extensions";
+
+const DEFAULT_EXTENSIONS: Extension[] = [
+  { id: "web-search", name: "Web Search", description: "Search the web and include results in conversations", category: "Tools", icon: "🔍", installed: true, author: "CPUAGEN", capabilities: ["web_search", "url_fetch"] },
+  { id: "code-interpreter", name: "Code Interpreter", description: "Execute Python, JavaScript, and TypeScript in a sandboxed environment", category: "Tools", icon: "⚡", installed: true, author: "CPUAGEN", capabilities: ["code_execution", "sandbox"] },
+  { id: "image-gen", name: "Image Generation", description: "Generate images from text descriptions using DALL-E or Stable Diffusion", category: "Creative", icon: "🎨", installed: false, author: "CPUAGEN", capabilities: ["image_generation"] },
+  { id: "github", name: "GitHub Integration", description: "Browse repos, create issues, manage PRs directly from chat", category: "Developer", icon: "🐙", installed: false, author: "Community", capabilities: ["github_api"] },
+  { id: "slack", name: "Slack Connector", description: "Send messages and read channels from within CPUAGEN", category: "Communication", icon: "💬", installed: false, author: "Community", capabilities: ["slack_messaging"] },
+  { id: "notion", name: "Notion Sync", description: "Read and write to Notion databases and pages", category: "Productivity", icon: "📝", installed: false, author: "Community", capabilities: ["notion_api"] },
+  { id: "calendar", name: "Calendar Assistant", description: "Manage Google Calendar events and scheduling", category: "Productivity", icon: "📅", installed: false, author: "Community", capabilities: ["calendar_api"] },
+  { id: "data-viz", name: "Data Visualization", description: "Create charts, graphs, and dashboards from data", category: "Analytics", icon: "📊", installed: false, author: "CPUAGEN", capabilities: ["chart_generation", "data_analysis"] },
+  { id: "voice", name: "Voice Input/Output", description: "Speak to CPUAGEN and hear responses with text-to-speech", category: "Accessibility", icon: "🎤", installed: false, author: "CPUAGEN", capabilities: ["speech_to_text", "text_to_speech"] },
+  { id: "mcp-server", name: "MCP Server Bridge", description: "Connect to any MCP-compatible tool server for extended capabilities", category: "Developer", icon: "🔌", installed: false, author: "CPUAGEN", capabilities: ["mcp_bridge"] },
+  { id: "pdf-tools", name: "PDF Tools Pro", description: "Advanced PDF manipulation — merge, split, sign, watermark", category: "Tools", icon: "📄", installed: true, author: "CPUAGEN", capabilities: ["pdf_manipulation"] },
+  { id: "db-explorer", name: "Database Explorer", description: "Connect to PostgreSQL, MySQL, SQLite and query from chat", category: "Developer", icon: "🗄️", installed: false, author: "Community", capabilities: ["database_query"] },
 ];
 
+function loadExtensions(): Extension[] {
+  if (typeof window === "undefined") return DEFAULT_EXTENSIONS;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return DEFAULT_EXTENSIONS;
+    const installedIds: string[] = JSON.parse(saved);
+    return DEFAULT_EXTENSIONS.map((ext) => ({
+      ...ext,
+      installed: installedIds.includes(ext.id),
+    }));
+  } catch {
+    return DEFAULT_EXTENSIONS;
+  }
+}
+
+function saveExtensions(exts: Extension[]) {
+  const installedIds = exts.filter((e) => e.installed).map((e) => e.id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(installedIds));
+  // Also broadcast to settings so chat page can read installed capabilities
+  const capabilities = exts
+    .filter((e) => e.installed && e.capabilities)
+    .flatMap((e) => e.capabilities || []);
+  const settings = JSON.parse(localStorage.getItem("cpuagen-settings") || "{}");
+  settings.installedExtensions = installedIds;
+  settings.capabilities = capabilities;
+  localStorage.setItem("cpuagen-settings", JSON.stringify(settings));
+}
+
 export default function ExtensionsPage() {
-  const [exts, setExts] = useState(EXTENSIONS);
+  const [exts, setExts] = useState<Extension[]>(DEFAULT_EXTENSIONS);
   const [filter, setFilter] = useState<string>("All");
   const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "info" } | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  const categories = ["All", ...new Set(EXTENSIONS.map((e) => e.category))];
+  // Load persisted state on mount
+  useEffect(() => {
+    setExts(loadExtensions());
+    setLoaded(true);
+  }, []);
+
+  const categories = ["All", ...new Set(DEFAULT_EXTENSIONS.map((e) => e.category))];
 
   const filtered = exts.filter((e) => {
     if (filter !== "All" && e.category !== filter) return false;
@@ -40,19 +80,72 @@ export default function ExtensionsPage() {
     return true;
   });
 
-  const toggle = (id: string) => {
-    setExts((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, installed: !e.installed } : e))
+  const installedCount = exts.filter((e) => e.installed).length;
+
+  const toggle = useCallback(async (id: string) => {
+    if (busy) return;
+    setBusy(id);
+
+    // Simulate install/uninstall process (250ms feels responsive)
+    await new Promise((r) => setTimeout(r, 250));
+
+    setExts((prev) => {
+      const next = prev.map((e) =>
+        e.id === id ? { ...e, installed: !e.installed } : e
+      );
+      saveExtensions(next);
+      const ext = next.find((e) => e.id === id);
+      if (ext) {
+        setToast({
+          msg: ext.installed
+            ? `${ext.name} installed`
+            : `${ext.name} removed`,
+          type: ext.installed ? "success" : "info",
+        });
+      }
+      return next;
+    });
+
+    setBusy(null);
+
+    // Auto-dismiss toast
+    setTimeout(() => setToast(null), 2000);
+  }, [busy]);
+
+  if (!loaded) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <span className="text-sm text-muted">Loading extensions...</span>
+      </div>
     );
-  };
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Toast notification */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-lg text-xs font-medium shadow-lg border transition-all animate-in fade-in slide-in-from-top-2 ${
+          toast.type === "success"
+            ? "bg-success/10 text-success border-success/20"
+            : "bg-surface border-border text-muted"
+        }`}>
+          {toast.msg}
+        </div>
+      )}
+
       <div className="p-6 border-b border-border">
-        <h1 className="text-xl font-semibold">Extensions</h1>
-        <p className="text-sm text-muted mt-1">
-          Extend CPUAGEN with tools, integrations, and capabilities
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold">Extensions</h1>
+            <p className="text-sm text-muted mt-1">
+              Extend CPUAGEN with tools, integrations, and capabilities
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-accent-light">{installedCount}</div>
+            <div className="text-[10px] text-muted font-mono">INSTALLED</div>
+          </div>
+        </div>
       </div>
 
       <div className="px-6 pt-4 space-y-3">
@@ -84,7 +177,9 @@ export default function ExtensionsPage() {
           {filtered.map((ext) => (
             <div
               key={ext.id}
-              className="bg-surface border border-border rounded-lg p-4 flex flex-col"
+              className={`bg-surface border rounded-lg p-4 flex flex-col transition-colors ${
+                ext.installed ? "border-success/20" : "border-border"
+              }`}
             >
               <div className="flex items-start gap-3 mb-3">
                 <span className="text-2xl">{ext.icon}</span>
@@ -97,15 +192,30 @@ export default function ExtensionsPage() {
                 </span>
               </div>
               <p className="text-xs text-muted flex-1 mb-3">{ext.description}</p>
+
+              {/* Capability tags */}
+              {ext.capabilities && ext.installed && (
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {ext.capabilities.map((cap) => (
+                    <span key={cap} className="text-[9px] px-1.5 py-0.5 rounded bg-accent/10 text-accent-light font-mono">
+                      {cap}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <button
                 onClick={() => toggle(ext.id)}
-                className={`w-full py-2 rounded-lg text-xs font-medium transition-colors ${
+                disabled={busy === ext.id}
+                className={`w-full py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait ${
                   ext.installed
                     ? "bg-success/10 text-success border border-success/20 hover:bg-danger/10 hover:text-danger hover:border-danger/20"
                     : "bg-accent/10 text-accent-light border border-accent/20 hover:bg-accent/20"
                 }`}
               >
-                {ext.installed ? "Installed" : "Install"}
+                {busy === ext.id
+                  ? (ext.installed ? "Removing..." : "Installing...")
+                  : (ext.installed ? "Installed" : "Install")}
               </button>
             </div>
           ))}

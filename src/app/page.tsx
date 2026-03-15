@@ -98,7 +98,7 @@ function ArchitectureDiagram() {
       items: [
         "Validation Gateway",
         "Enforcement Engine",
-        "Safety Barriers (8)",
+        "Safety Barriers (9)",
         "Knowledge Cache",
       ],
       color: "border-accent/40",
@@ -154,7 +154,7 @@ function EnforcementDemo() {
     { label: "VALIDATE", desc: "Barrier series active", highlight: true },
     { label: "LLM", desc: "Model responds" },
     { label: "REVALIDATE", desc: "Output checked", highlight: true },
-    { label: "DELIVER", desc: "Cached & sent" },
+    { label: "DELIVER", desc: "Basin stored & sent" },
   ];
 
   useEffect(() => {
@@ -209,6 +209,18 @@ function WaitlistForm() {
   const [error, setError] = useState("");
   const [alreadyExists, setAlreadyExists] = useState(false);
 
+  // Check localStorage on mount — hide form if already signed up
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("cpuagen_waitlist_email");
+      if (stored) {
+        setEmail(stored);
+        setSubmitted(true);
+        setAlreadyExists(true);
+      }
+    } catch { /* localStorage unavailable */ }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
@@ -224,6 +236,7 @@ function WaitlistForm() {
       if (res.ok && data.ok) {
         setSubmitted(true);
         setAlreadyExists(data.alreadyExists);
+        try { localStorage.setItem("cpuagen_waitlist_email", email.toLowerCase().trim()); } catch { /* */ }
       } else {
         setError(data.error || "Something went wrong");
       }
@@ -269,8 +282,39 @@ function WaitlistForm() {
   );
 }
 
+/* ─── Live engine stats hook ─── */
+function useLiveStats() {
+  const [stats, setStats] = useState<{
+    teepCount: number;
+    cacheHits: number;
+    hitRate: string;
+    morphicField: number;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/teep")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) {
+          const s = data.snapshot;
+          const total = s.counters.cacheHits + s.counters.cacheMisses;
+          setStats({
+            teepCount: s.teeps.length,
+            cacheHits: s.counters.cacheHits,
+            hitRate: total > 0 ? ((s.counters.cacheHits / total) * 100).toFixed(0) : "0",
+            morphicField: s.morphicFieldStrength,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  return stats;
+}
+
 /* ─── Main page ─── */
 export default function Home() {
+  const liveStats = useLiveStats();
   return (
     <main className="min-h-screen grid-bg">
       {/* Nav */}
@@ -314,9 +358,9 @@ export default function Home() {
           </h1>
 
           <p className="text-lg sm:text-xl text-muted max-w-2xl mx-auto mb-10 leading-relaxed">
-            CPUAGEN is the enforcement layer between you and your AI. Every
+            CPUAGEN (CPU Agentic Engine) is the enforcement layer between you and your AI. Every
             prompt is validated. Every response passes a full series of safety
-            barriers. Every answer is permanently cached. Bring Claude, GPT,
+            barriers. Every solved state compounds into reusable knowledge. Bring Claude, GPT,
             Gemini, Grok &mdash; we make them honest.
           </p>
 
@@ -350,15 +394,29 @@ export default function Home() {
             <div className="text-xs text-muted mt-1">Validated Responses</div>
           </div>
           <div>
-            <div className="text-2xl font-bold font-mono text-accent-light">ALL</div>
-            <div className="text-xs text-muted mt-1">Safety Barriers</div>
+            <div className="text-2xl font-bold font-mono text-accent-light">
+              {liveStats ? `${liveStats.hitRate}%` : "ALL"}
+            </div>
+            <div className="text-xs text-muted mt-1">
+              {liveStats ? "Live Cache Hit Rate" : "Safety Barriers"}
+            </div>
+            {liveStats && (
+              <div className="flex items-center justify-center gap-1 mt-1">
+                <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
+                <span className="text-[9px] text-success font-mono">LIVE</span>
+              </div>
+            )}
           </div>
           <div>
-            <div className="text-2xl font-bold font-mono text-accent-light">&lt;1ms</div>
-            <div className="text-xs text-muted mt-1">Cache Lookup</div>
+            <div className="text-2xl font-bold font-mono text-accent-light">
+              {liveStats ? liveStats.teepCount : "<1ms"}
+            </div>
+            <div className="text-xs text-muted mt-1">
+              {liveStats ? "Active TEEPs" : "Cache Lookup"}
+            </div>
           </div>
           <div>
-            <div className="text-2xl font-bold font-mono text-accent-light">5+</div>
+            <div className="text-2xl font-bold font-mono text-accent-light">6</div>
             <div className="text-xs text-muted mt-1">LLM Providers</div>
           </div>
         </div>
@@ -383,7 +441,7 @@ export default function Home() {
           <p className="text-muted text-center mb-12 max-w-xl mx-auto">
             Not another chatbot wrapper. A physics engine that sits between you and any LLM.
           </p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <FeatureCard
               icon={"\u2696\uFE0F"}
               title="Validated AI Responses"
@@ -392,15 +450,15 @@ export default function Home() {
             />
             <FeatureCard
               icon={"\uD83D\uDEE1\uFE0F"}
-              title="8 Safety Barriers"
-              description="Truth, naturality, energy, coherence, and more. All 8 independent safety checks must pass or the output is blocked."
-              metric={"ALL SAFE \u2192 EMIT | ANY UNSAFE \u2192 BLOCK"}
+              title="9 Safety Barriers"
+              description="Truth, naturality, energy, thermal stability, coherence, output guard, quality, synergy, and free energy. All 9 independent Control Barrier Functions must pass or the output is blocked."
+              metric={"ALL 9 SAFE \u2192 EMIT | ANY UNSAFE \u2192 BLOCK"}
             />
             <FeatureCard
               icon={"\u26A1"}
-              title="Permanent Knowledge Cache"
-              description="Once a question is validated, the answer is cached forever. Millions of pre-validated responses mean most queries return instantly."
-              metric="<1ms cached lookups"
+              title="Basin State Memory"
+              description="Once a query is solved, its thermodynamic basin state is stored as a TEEP. Millions of pre-solved states let the LLM render from known attractors, skipping costly re-computation."
+              metric="7.3M+ solved basins"
             />
             <FeatureCard
               icon={"\uD83C\uDF10"}
@@ -416,27 +474,51 @@ export default function Home() {
             />
             <FeatureCard
               icon={"\uD83D\uDE80"}
-              title="Accelerated Inference"
-              description="3-stage algebraic optimization pre-conditions queries for faster convergence. Cache-first protocol ensures the AI is only called when necessary."
-              metric="0ms for cached · O(1) lookup"
+              title="Semantic Cannon"
+              description="3-stage golden-ratio entropy compression: Cannon Fire, Cavitation, and Mach Diamond lock. Watch the full pipeline in the interactive Physics Lab on the Dashboard."
+              metric="3-stage golden pipeline"
             />
             <FeatureCard
               icon={"\uD83D\uDCCA"}
-              title="Multi-Model Consensus"
-              description="For critical decisions, query multiple LLMs simultaneously and converge on a validated consensus answer."
-              metric="Cross-model validation"
+              title="Ensemble Consensus"
+              description="Query 2-6 LLM providers simultaneously. Thermosolve each response independently, compute weighted centroids, detect outliers, and converge on a validated consensus answer."
+              metric="Multi-provider agreement scoring"
             />
             <FeatureCard
               icon={"\uD83C\uDFAF"}
-              title="Adaptive Learning"
-              description="The enforcement engine learns from every interaction. Information geometry weights adapt based on which dimensions matter most for your queries."
-              metric="Self-tuning validation"
+              title="Fisher Geometry"
+              description="The enforcement engine learns via Riemannian geometry. A 7x7 Fisher information matrix tracks dimension correlations. Weights adapt in real-time based on which semantic dimensions matter most."
+              metric="Riemannian manifold · adaptive weights"
             />
             <FeatureCard
               icon={"\uD83D\uDEE0\uFE0F"}
-              title="Code + Workspace"
-              description={"Full IDE in the browser. Chat, code canvas, PDF markup, and dev lab \u2014 all through the enforcement layer. Agentic coding mode coming soon."}
-              metric="Chat · Dev Lab · Code · Dual"
+              title="Code + Workspace + Lab"
+              description={"Full IDE in the browser. Chat, code canvas, PDF markup, dev lab, and interactive Physics Lab \u2014 all through the enforcement layer. Try the Lab to see thermosolve, CBFs, and the Semantic Cannon in real-time."}
+              metric="Chat · Lab · Code · Dual · Dev"
+            />
+            <FeatureCard
+              icon={"\uD83D\uDDDC\uFE0F"}
+              title="Bekenstein Compression"
+              description="Every TEEP signature is compressed to the theoretical maximum information density — the Bekenstein bound from black hole physics. Optimal storage while preserving all meaningful semantic content."
+              metric={"S_max = 2\u03C0RE/\u210Fc"}
+            />
+            <FeatureCard
+              icon={"\uD83D\uDCA0"}
+              title="Mach Diamond Detection"
+              description="When multiple queries converge on the same semantic region, the engine detects standing-wave interference patterns — Mach Diamonds. These mark high-confidence knowledge convergence zones."
+              metric="Standing-wave convergence"
+            />
+            <FeatureCard
+              icon={"\uD83D\uDD17"}
+              title="TEEP Chain Tracing"
+              description="Every TEEP records its causal lineage: parent queries and child results form a directed acyclic graph. Trace knowledge provenance backward to root causes or forward to consequences."
+              metric="Full causal DAG traversal"
+            />
+            <FeatureCard
+              icon={"\uD83D\uDD04"}
+              title="Multi-Turn Agent Loop"
+              description="Tier 2 autonomous agents plan, execute tools, observe results, and iterate. Web search, code execution, calculations, URL fetching — all CBF-enforced at every step."
+              metric="Plan · Execute · Observe · Decide"
             />
           </div>
         </div>
@@ -523,6 +605,7 @@ export default function Home() {
             <span className="text-xs text-muted ml-2">Physics-Based AI Enforcement</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-muted">
+            <a href="/app/feedback" className="hover:text-foreground transition-colors">Bug Report / Suggestions</a>
             <span>Powered by CPUAGEN Engine</span>
             <span>&copy; {new Date().getFullYear()} Wesley Foreman</span>
           </div>

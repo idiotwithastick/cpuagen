@@ -10,6 +10,18 @@ interface SecurityEvent {
   details?: string;
 }
 
+interface FeedbackItem {
+  id: string;
+  type: "bug" | "suggestion";
+  subject: string;
+  description: string;
+  email?: string;
+  page?: string;
+  ip: string;
+  timestamp: number;
+  status: "new" | "reviewed" | "resolved" | "dismissed";
+}
+
 interface DashboardData {
   lockout: {
     siteLocked: boolean;
@@ -76,10 +88,14 @@ interface DashboardData {
       hash: string;
       created: number;
       hits: number;
-      contentPreview?: string;
       semanticMass?: number;
       resonanceStrength?: number;
-      sig: { n: number; S: number; phi: number; I_truth: number };
+      sig: {
+        n: number; S: number; dS: number; phi: number;
+        I_truth: number; naturality: number; beta_T: number;
+        psi_coherence: number; synergy: number; Q_quality: number;
+        trigram_hash: number;
+      };
     }>;
   };
   earlyAccess?: {
@@ -93,13 +109,20 @@ interface DashboardData {
       accessGranted: boolean;
     }>;
   };
+  feedback?: {
+    stats: { total: number; bugs: number; suggestions: number; new: number; reviewed: number; resolved: number };
+    items: FeedbackItem[];
+  };
   meta: {
     signature: {
       n: number; S: number; phi: number; dS: number;
       I_truth?: number; naturality?: number; beta_T?: number;
       psi_coherence?: number; synergy?: number;
     };
-    cbf: { allSafe: boolean };
+    cbf: {
+      allSafe: boolean;
+      barriers?: Record<string, { safe: boolean; value: number }>;
+    };
   };
 }
 
@@ -148,7 +171,7 @@ export default function AdminDashboard() {
       if (!res.ok) {
         if (res.status === 401) {
           sessionStorage.removeItem("cpuagen-admin-token");
-          router.push("/admin");
+          window.location.href = "/admin";
           return;
         }
         throw new Error(`HTTP ${res.status}`);
@@ -201,7 +224,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!token) {
-      router.push("/admin");
+      window.location.href = "/admin";
       return;
     }
     fetchData();
@@ -249,9 +272,30 @@ export default function AdminDashboard() {
     setActionLoading("");
   };
 
+  const handleFeedbackAction = async (action: string, id: string, status?: string) => {
+    if (!token) return;
+    setActionLoading(`${action}:${id}`);
+    try {
+      await fetch("/api/admin/stats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action, id, status }),
+      });
+      await fetchData();
+    } catch {
+      // ignore
+    }
+    setActionLoading("");
+  };
+
+  const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null);
+
   const handleLogout = () => {
     sessionStorage.removeItem("cpuagen-admin-token");
-    router.push("/admin");
+    window.location.href = "/admin";
   };
 
   if (!token) return null;
@@ -261,7 +305,7 @@ export default function AdminDashboard() {
       <div className="min-h-screen bg-[#050508] flex items-center justify-center p-4">
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
-          <button onClick={() => router.push("/admin")} className="text-sm text-[#71717a] hover:text-white cursor-pointer">
+          <button onClick={() => window.location.href = "/admin"} className="text-sm text-[#71717a] hover:text-white cursor-pointer">
             Back to login
           </button>
         </div>
@@ -393,7 +437,7 @@ export default function AdminDashboard() {
               </div>
               <div className="text-[10px] font-mono text-[#71717a] space-y-1">
                 <div className="flex justify-between">
-                  <span>8 Control Barrier Functions</span>
+                  <span>9 Control Barrier Functions</span>
                   <span className="text-green-400">ALL ACTIVE</span>
                 </div>
                 <div className="flex justify-between">
@@ -418,8 +462,22 @@ export default function AdminDashboard() {
                   <div>I_truth={meta.signature.I_truth ?? "—"} | nat={meta.signature.naturality ?? "—"} | beta_T={meta.signature.beta_T ?? "—"}</div>
                   <div>psi_coh={meta.signature.psi_coherence ?? "—"} | synergy={meta.signature.synergy ?? "—"}</div>
                 </div>
-                <div className="text-[10px] font-mono text-green-400/80 mt-1">
-                  CBF: {meta.cbf.allSafe ? "ALL 8 SAFE" : "BLOCKED"}
+                <div className="mt-2">
+                  <div className="text-[9px] font-mono text-[#71717a]/60 mb-1">CONTROL BARRIER FUNCTIONS ({meta.cbf.allSafe ? "ALL SAFE" : "BLOCKED"})</div>
+                  {meta.cbf.barriers ? (
+                    <div className="grid grid-cols-3 gap-1">
+                      {Object.entries(meta.cbf.barriers).map(([name, b]) => (
+                        <div key={name} className={`text-center p-1 rounded text-[9px] font-mono border ${b.safe ? "border-green-500/20 bg-green-950/20 text-green-400" : "border-red-500/30 bg-red-950/30 text-red-400"}`}>
+                          <div className="font-bold">{name}</div>
+                          <div className="text-[8px] opacity-70">{b.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] font-mono text-green-400/80">
+                      CBF: {meta.cbf.allSafe ? "ALL SAFE" : "BLOCKED"}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -554,13 +612,13 @@ export default function AdminDashboard() {
                   )}
                 </div>
 
-                {/* Recent TEEPs with content preview */}
+                {/* Recent TEEPs — full thermodynamic state vectors */}
                 {physics.recentTeeps.length > 0 && (
                   <div className="pt-2 border-t border-[#1e1e2e]">
-                    <div className="text-[9px] font-mono text-[#71717a]/60 mb-1">SOLVED BASINS (TEEP CONTENT)</div>
-                    <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    <div className="text-[9px] font-mono text-[#71717a]/60 mb-1">SOLVED BASINS (STATE VECTORS)</div>
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
                       {physics.recentTeeps.map((teep) => (
-                        <div key={teep.id} className="py-1 border-b border-[#1e1e2e] last:border-0">
+                        <div key={teep.id} className="py-1.5 border-b border-[#1e1e2e] last:border-0">
                           <div className="flex items-center justify-between text-[9px] font-mono">
                             <span className="text-purple-400">{teep.id}</span>
                             <span className="text-[#71717a]">
@@ -569,11 +627,20 @@ export default function AdminDashboard() {
                               {teep.resonanceStrength !== undefined && teep.resonanceStrength > 0 && <> | R={teep.resonanceStrength.toFixed(3)}</>}
                             </span>
                           </div>
-                          {teep.contentPreview && (
-                            <div className="text-[8px] font-mono text-[#71717a]/60 mt-0.5 truncate">
-                              {teep.contentPreview}
-                            </div>
-                          )}
+                          {/* Full 12D thermodynamic signature — STATE, not text */}
+                          <div className="mt-1 grid grid-cols-4 gap-x-3 gap-y-0.5 text-[8px] font-mono">
+                            <span className="text-cyan-400/80">n={teep.sig.n}</span>
+                            <span className="text-green-400/80">S={teep.sig.S}</span>
+                            <span className={`${teep.sig.dS < 0 ? 'text-green-400/80' : 'text-red-400/80'}`}>dS={teep.sig.dS}</span>
+                            <span className="text-blue-400/80">φ={teep.sig.phi}</span>
+                            <span className={`${teep.sig.I_truth >= 0.3 ? 'text-green-400/80' : 'text-red-400/80'}`}>I<sub>t</sub>={teep.sig.I_truth}</span>
+                            <span className={`${teep.sig.naturality >= 0.2 ? 'text-green-400/80' : 'text-red-400/80'}`}>nat={teep.sig.naturality}</span>
+                            <span className={`${Math.abs(teep.sig.beta_T - 1) < 0.5 ? 'text-green-400/80' : 'text-yellow-400/80'}`}>β<sub>T</sub>={teep.sig.beta_T}</span>
+                            <span className={`${teep.sig.psi_coherence >= 0.1 ? 'text-green-400/80' : 'text-red-400/80'}`}>ψ<sub>c</sub>={teep.sig.psi_coherence}</span>
+                            <span className={`${teep.sig.synergy >= 0.5 ? 'text-green-400/80' : 'text-red-400/80'}`}>syn={teep.sig.synergy}</span>
+                            <span className="text-[#71717a]/60">Q={teep.sig.Q_quality}</span>
+                            <span className="text-[#71717a]/40 col-span-2">hash={teep.sig.trigram_hash}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -597,7 +664,7 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="text-center p-2 rounded bg-[#1a1a2e] border border-purple-500/30">
                     <div className="text-lg font-bold font-mono text-purple-400">
-                      {physics.morphic.fieldStrength.toFixed(4)}
+                      {(physics.morphic.fieldStrength ?? 0).toFixed(4)}
                     </div>
                     <div className="text-[9px] text-[#71717a]">Field Strength</div>
                   </div>
@@ -609,13 +676,13 @@ export default function AdminDashboard() {
                   </div>
                   <div className="text-center p-2 rounded bg-[#1a1a2e] border border-cyan-500/30">
                     <div className="text-lg font-bold font-mono text-cyan-400">
-                      {physics.morphic.basinThreshold.toFixed(4)}
+                      {(physics.morphic.basinThreshold ?? 0).toFixed(4)}
                     </div>
                     <div className="text-[9px] text-[#71717a]">Basin Threshold</div>
                   </div>
                   <div className="text-center p-2 rounded bg-[#1a1a2e] border border-cyan-500/30">
                     <div className="text-lg font-bold font-mono text-cyan-400">
-                      {physics.morphic.totalSemanticMass.toFixed(4)}
+                      {(physics.morphic.totalSemanticMass ?? 0).toFixed(4)}
                     </div>
                     <div className="text-[9px] text-[#71717a]">Total Semantic Mass</div>
                   </div>
@@ -626,7 +693,7 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-7 gap-1">
                   {Object.entries(physics.morphic.dynamicFisherWeights).map(([dim, weight]) => (
                     <div key={dim} className="text-center p-1 rounded bg-[#0a0a15] border border-[#1e1e2e]">
-                      <div className="text-[10px] font-mono text-green-400">{(weight as number).toFixed(2)}</div>
+                      <div className="text-[10px] font-mono text-green-400">{(Number(weight) || 0).toFixed(2)}</div>
                       <div className="text-[8px] text-[#71717a]">{dim}</div>
                     </div>
                   ))}
@@ -748,6 +815,142 @@ export default function AdminDashboard() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Bug Reports & Feedback */}
+        {data.feedback && (
+          <Card title="BUG REPORTS & FEEDBACK">
+            <div className="space-y-4">
+              {/* Stats Row */}
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-purple-500/20">
+                  <div className="text-lg font-bold font-mono text-purple-400">{data.feedback.stats.total}</div>
+                  <div className="text-[9px] text-[#71717a]">Total</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-red-500/20">
+                  <div className="text-lg font-bold font-mono text-red-400">{data.feedback.stats.bugs}</div>
+                  <div className="text-[9px] text-[#71717a]">Bugs</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-blue-500/20">
+                  <div className="text-lg font-bold font-mono text-blue-400">{data.feedback.stats.suggestions}</div>
+                  <div className="text-[9px] text-[#71717a]">Suggestions</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-yellow-500/20">
+                  <div className="text-lg font-bold font-mono text-yellow-400">{data.feedback.stats.new}</div>
+                  <div className="text-[9px] text-[#71717a]">New</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-cyan-500/20">
+                  <div className="text-lg font-bold font-mono text-cyan-400">{data.feedback.stats.reviewed}</div>
+                  <div className="text-[9px] text-[#71717a]">Reviewed</div>
+                </div>
+                <div className="text-center p-2 rounded bg-[#1a1a2e] border border-green-500/20">
+                  <div className="text-lg font-bold font-mono text-green-400">{data.feedback.stats.resolved}</div>
+                  <div className="text-[9px] text-[#71717a]">Resolved</div>
+                </div>
+              </div>
+
+              {/* Feedback List */}
+              {data.feedback.items.length === 0 ? (
+                <div className="text-[10px] text-[#71717a]/50 font-mono py-4 text-center">
+                  No feedback submitted yet
+                </div>
+              ) : (
+                <div className="max-h-96 overflow-y-auto space-y-2">
+                  {data.feedback.items.map((fb) => (
+                    <div key={fb.id} className={`rounded-lg border p-3 ${
+                      fb.status === "new" ? "border-yellow-500/30 bg-yellow-950/10" :
+                      fb.status === "resolved" ? "border-green-500/20 bg-green-950/10" :
+                      fb.status === "dismissed" ? "border-[#1e1e2e] bg-[#0c0c12] opacity-50" :
+                      "border-[#1e1e2e] bg-[#0c0c12]"
+                    }`}>
+                      {/* Header row */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono ${
+                            fb.type === "bug"
+                              ? "bg-red-900/40 text-red-400 border border-red-500/20"
+                              : "bg-blue-900/40 text-blue-400 border border-blue-500/20"
+                          }`}>
+                            {fb.type === "bug" ? "BUG" : "IDEA"}
+                          </span>
+                          <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono ${
+                            fb.status === "new" ? "bg-yellow-900/40 text-yellow-400 border border-yellow-500/20" :
+                            fb.status === "reviewed" ? "bg-cyan-900/40 text-cyan-400 border border-cyan-500/20" :
+                            fb.status === "resolved" ? "bg-green-900/40 text-green-400 border border-green-500/20" :
+                            "bg-[#1e1e2e] text-[#71717a] border border-[#1e1e2e]"
+                          }`}>
+                            {fb.status.toUpperCase()}
+                          </span>
+                          <button
+                            onClick={() => setExpandedFeedback(expandedFeedback === fb.id ? null : fb.id)}
+                            className="text-xs font-medium text-[#e4e4e7] truncate hover:text-white cursor-pointer text-left"
+                          >
+                            {fb.subject}
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] font-mono text-[#71717a]">
+                            {new Date(fb.timestamp).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Expanded content */}
+                      {expandedFeedback === fb.id && (
+                        <div className="mt-3 space-y-2">
+                          <pre className="text-[10px] font-mono text-[#e4e4e7]/80 whitespace-pre-wrap bg-[#050508] rounded p-3 max-h-48 overflow-y-auto">
+                            {fb.description}
+                          </pre>
+                          <div className="flex items-center gap-3 text-[9px] font-mono text-[#71717a]">
+                            {fb.email && <span>From: {fb.email}</span>}
+                            {fb.page && <span>Page: {fb.page}</span>}
+                            <span>IP: {fb.ip}</span>
+                            <span>{new Date(fb.timestamp).toLocaleString()}</span>
+                          </div>
+                          <div className="flex gap-1 pt-1">
+                            {fb.status !== "reviewed" && (
+                              <button
+                                onClick={() => handleFeedbackAction("feedback_status", fb.id, "reviewed")}
+                                disabled={!!actionLoading}
+                                className="px-2 py-0.5 rounded text-[9px] font-mono bg-cyan-900/40 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-900/60 transition-colors disabled:opacity-50 cursor-pointer"
+                              >
+                                {actionLoading === `feedback_status:${fb.id}` ? "..." : "Mark Reviewed"}
+                              </button>
+                            )}
+                            {fb.status !== "resolved" && (
+                              <button
+                                onClick={() => handleFeedbackAction("feedback_status", fb.id, "resolved")}
+                                disabled={!!actionLoading}
+                                className="px-2 py-0.5 rounded text-[9px] font-mono bg-green-900/40 border border-green-500/20 text-green-400 hover:bg-green-900/60 transition-colors disabled:opacity-50 cursor-pointer"
+                              >
+                                {actionLoading === `feedback_status:${fb.id}` ? "..." : "Resolve"}
+                              </button>
+                            )}
+                            {fb.status !== "dismissed" && (
+                              <button
+                                onClick={() => handleFeedbackAction("feedback_status", fb.id, "dismissed")}
+                                disabled={!!actionLoading}
+                                className="px-2 py-0.5 rounded text-[9px] font-mono bg-[#1e1e2e] border border-[#1e1e2e] text-[#71717a] hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
+                              >
+                                Dismiss
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { if (confirm("Delete this feedback?")) handleFeedbackAction("feedback_delete", fb.id); }}
+                              disabled={!!actionLoading}
+                              className="px-2 py-0.5 rounded text-[9px] font-mono bg-red-900/40 border border-red-500/20 text-red-400 hover:bg-red-900/60 transition-colors disabled:opacity-50 cursor-pointer ml-auto"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

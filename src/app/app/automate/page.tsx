@@ -1,6 +1,18 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { withAdminToken } from "@/lib/admin";
+import { getCoreContext } from "@/lib/system-context";
+import { migrateSettings, DEFAULT_SETTINGS } from "@/lib/types";
+import type { Settings } from "@/lib/types";
+
+interface EnforcementBadge {
+  allSafe: boolean;
+  barrierCount: number;
+  safeCount: number;
+  agfHitType?: string;
+  timing?: number;
+}
 
 interface AutomationStep {
   id: string;
@@ -26,41 +38,40 @@ export default function AutomatePage() {
   const [output, setOutput] = useState("");
   const [running, setRunning] = useState(false);
   const [tab, setTab] = useState<"natural" | "recorder" | "saved">("natural");
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [enforcement, setEnforcement] = useState<EnforcementBadge | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("cpuagen-settings") || "{}");
+      setSettings(migrateSettings(raw));
+    } catch { /* use defaults */ }
+  }, []);
 
   const runAutomation = useCallback(async () => {
     if (!prompt.trim()) return;
     setRunning(true);
     setOutput("");
+    setEnforcement(null);
     abortRef.current = new AbortController();
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(withAdminToken({
           messages: [
             {
               role: "system",
-              content: `You are a browser automation assistant. The user wants you to automate web tasks.
-Describe step-by-step what you would do, including:
-- Navigation: go to URL
-- Click: click element with selector
-- Type: type text into input
-- Wait: wait for element/condition
-- Extract: get text/data from page
-- Screenshot: capture the page
-
-Format each step as: [ACTION] target — detail
-Example: [NAVIGATE] https://example.com — open the page
-[CLICK] button.submit — click the submit button
-[TYPE] input#search — "search query"`,
+              content: getCoreContext() + `\n\n# AUTOMATE MODE — BROWSER AUTOMATION INTERFACE\n\nYou are operating in CPUAGEN's Automate mode — a browser automation planning environment. The user wants you to automate web tasks.\nDescribe step-by-step what you would do, including:\n- Navigation: go to URL\n- Click: click element with selector\n- Type: type text into input\n- Wait: wait for element/condition\n- Extract: get text/data from page\n- Screenshot: capture the page\n\nFormat each step as: [ACTION] target — detail\nExample: [NAVIGATE] https://example.com — open the page\n[CLICK] button.submit — click the submit button\n[TYPE] input#search — "search query"`,
             },
             { role: "user", content: `URL: ${url}\n\nTask: ${prompt}` },
           ],
-          provider: "demo",
-          model: "gemini-2.0-flash",
-        }),
+          provider: settings.activeProvider,
+          model: settings.activeModel,
+          apiKey: settings.activeProvider !== "demo" ? settings.apiKeys[settings.activeProvider as keyof typeof settings.apiKeys] || "" : "",
+        })),
         signal: abortRef.current.signal,
       });
 
@@ -85,6 +96,15 @@ Example: [NAVIGATE] https://example.com — open the page
               if (parsed.type === "delta") {
                 result += parsed.content;
                 setOutput(result);
+              } else if (parsed.type === "enforcement") {
+                const e = parsed;
+                setEnforcement({
+                  allSafe: e.pre?.cbf?.allSafe ?? true,
+                  barrierCount: e.pre?.cbf?.barrierCount ?? 9,
+                  safeCount: e.pre?.cbf?.safeCount ?? 9,
+                  agfHitType: e.pre?.agf?.hitType,
+                  timing: e.pre?.timing,
+                });
               }
             } catch { /* skip */ }
           }
@@ -179,6 +199,23 @@ Example: [NAVIGATE] https://example.com — open the page
                 </button>
               </div>
             </div>
+
+            {enforcement && (
+              <div className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-[10px] font-mono border ${enforcement.allSafe ? "border-green-500/20 bg-green-950/20" : "border-red-500/30 bg-red-950/30"}`}>
+                <span className={enforcement.allSafe ? "text-green-400" : "text-red-400"}>
+                  {enforcement.allSafe ? "✓" : "✗"} CBF {enforcement.safeCount}/{enforcement.barrierCount}
+                </span>
+                {enforcement.agfHitType && (
+                  <span className="text-[#a1a1aa]">
+                    {enforcement.agfHitType === "FULL" || enforcement.agfHitType === "BASIN" ? "⚡" : "🧠"}{" "}
+                    {enforcement.agfHitType}
+                  </span>
+                )}
+                {enforcement.timing != null && (
+                  <span className="text-[#a1a1aa]">{enforcement.timing}ms</span>
+                )}
+              </div>
+            )}
 
             {output && (
               <div className="bg-surface border border-border rounded-lg p-4">

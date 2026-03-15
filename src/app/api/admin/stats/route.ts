@@ -1,4 +1,4 @@
-import { thermosolve, cbfCheck, getEnforcementMetrics, getRecentTeeps } from "@/lib/enforcement";
+import { thermosolve, cbfCheck, getEnforcementMetrics, getRecentTeeps, seedFromD1 } from "@/lib/enforcement";
 import {
   getLockoutData,
   getEnforcementStats,
@@ -8,6 +8,10 @@ import {
   markPasscodeSent,
   grantAccess,
   revokeAccess,
+  getFeedbackList,
+  getFeedbackStats,
+  updateFeedbackStatus,
+  deleteFeedback,
 } from "@/lib/security-state";
 
 function getIp(req: Request): string {
@@ -37,6 +41,10 @@ export async function GET(req: Request) {
   }
 
   const ip = getIp(req);
+
+  // Seed TEEP ledger from D1 on cold start — ensures admin sees TEEPs
+  // even if no chat requests have been made since last deploy
+  await seedFromD1();
 
   // SSD-RCI enforcement on the stats request itself
   const sig = thermosolve(`admin_stats_request:${ip}:${Date.now()}`);
@@ -86,6 +94,10 @@ export async function GET(req: Request) {
       stats: getEarlyAccessStats(),
       ledger: getEarlyAccessLedger(),
     },
+    feedback: {
+      stats: getFeedbackStats(),
+      items: getFeedbackList(),
+    },
     meta: {
       signature: {
         n: sig.n,
@@ -98,7 +110,14 @@ export async function GET(req: Request) {
         psi_coherence: sig.psi_coherence,
         synergy: sig.synergy,
       },
-      cbf: { allSafe: cbf.allSafe },
+      cbf: {
+        allSafe: cbf.allSafe,
+        barriers: {
+          BNR: cbf.BNR, BNN: cbf.BNN, BNA: cbf.BNA, TSE: cbf.TSE,
+          PCD: cbf.PCD, OGP: cbf.OGP, ECM: cbf.ECM, SPC: cbf.SPC,
+          FEP: cbf.FEP,
+        },
+      },
     },
   });
 }
@@ -120,28 +139,39 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  let body: { action: string; email: string };
+  let body: { action: string; email?: string; id?: string; status?: string };
   try {
     body = await req.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { action, email } = body;
-  if (!action || !email) {
-    return Response.json({ error: "Missing action or email" }, { status: 400 });
+  const { action } = body;
+  if (!action) {
+    return Response.json({ error: "Missing action" }, { status: 400 });
   }
 
-  if (action === "mark_sent") {
-    const ok = markPasscodeSent(email);
+  // Early access actions
+  if (action === "mark_sent" && body.email) {
+    const ok = markPasscodeSent(body.email);
     return Response.json({ ok });
   }
-  if (action === "grant") {
-    const ok = grantAccess(email);
+  if (action === "grant" && body.email) {
+    const ok = grantAccess(body.email);
     return Response.json({ ok });
   }
-  if (action === "revoke") {
-    const ok = revokeAccess(email);
+  if (action === "revoke" && body.email) {
+    const ok = revokeAccess(body.email);
+    return Response.json({ ok });
+  }
+
+  // Feedback actions
+  if (action === "feedback_status" && body.id && body.status) {
+    const ok = updateFeedbackStatus(body.id, body.status as "new" | "reviewed" | "resolved" | "dismissed");
+    return Response.json({ ok });
+  }
+  if (action === "feedback_delete" && body.id) {
+    const ok = deleteFeedback(body.id);
     return Response.json({ ok });
   }
 

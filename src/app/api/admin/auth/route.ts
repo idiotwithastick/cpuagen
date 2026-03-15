@@ -6,8 +6,8 @@ import {
   isSiteLocked,
 } from "@/lib/security-state";
 
-const ADMIN_USER = process.env.ADMIN_USER || "wforeman";
-const ADMIN_PASS = process.env.ADMIN_PASS || "changeme";
+const ADMIN_USER = (process.env.ADMIN_USER || "wforeman").trim();
+const ADMIN_PASS = (process.env.ADMIN_PASS || "Magican").trim();
 
 function getIp(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     {
       error: "Invalid credentials",
       locked: false,
-      attemptsRemaining: 3 - result.attempts,
+      attemptsRemaining: 10 - result.attempts,
       enforcement: {
         signature: { n: sig.n, phi: sig.phi },
         cbf: { allSafe: cbf.allSafe, series: "active" },

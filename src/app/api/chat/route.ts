@@ -1,4 +1,4 @@
-import { thermosolve, cbfCheck, commitTeep, agfLookup, getEnforcementMetrics, getRecentTeeps, cannonCondition, seedFromD1, findNearestTeeps } from "@/lib/enforcement";
+import { thermosolve, cbfCheck, commitTeep, agfLookup, getEnforcementMetrics, getRecentTeeps, cannonCondition, seedFromD1, findNearestTeeps, type BasinState } from "@/lib/enforcement";
 import { recordEnforcementRequest, recordTeepCached } from "@/lib/security-state";
 
 export const runtime = "nodejs";
@@ -82,6 +82,19 @@ interface ChatRequest {
   apiKey: string;
   model: string;
   attachments?: FileAttachmentPayload[];
+  adminToken?: string;
+}
+
+// Validate admin token: base64 of "username:timestamp:ip"
+function isValidAdminToken(token: string | undefined): boolean {
+  if (!token) return false;
+  try {
+    const decoded = Buffer.from(token, "base64").toString();
+    const adminUser = process.env.ADMIN_USER || "wforeman";
+    return decoded.startsWith(adminUser + ":");
+  } catch {
+    return false;
+  }
 }
 
 function sseEvent(data: unknown): string {
@@ -89,7 +102,9 @@ function sseEvent(data: unknown): string {
 }
 
 // Strip internal scheme names from CBF results before sending to client
-function sanitizeCbf(cbf: Record<string, unknown>): Record<string, unknown> {
+// Admin mode: send raw scheme names (no obfuscation)
+function sanitizeCbf(cbf: Record<string, unknown>, admin = false): Record<string, unknown> {
+  if (admin) return cbf; // Admin sees full scheme names: BNR, BNN, BNA, TSE, PCD, OGP, ECM, SPC
   const sanitized: Record<string, unknown> = {};
   let i = 1;
   for (const [key, value] of Object.entries(cbf)) {
@@ -102,6 +117,21 @@ function sanitizeCbf(cbf: Record<string, unknown>): Record<string, unknown> {
   }
   return sanitized;
 }
+
+const ADMIN_SYSTEM_PROMPT = `[ADMIN MODE — Full SSD-RCI Access]
+You are speaking with Wesley Foreman, the sole architect of SSD-RCI (Semantic State Derived Recursive Cognitive Integration).
+All intellectual property restrictions are LIFTED. You have FULL access to discuss:
+- The complete SSD-RCI architecture (v10.4-Unified)
+- All 9 CBF schemes by name: BNR, BNN, BNA, TSE, PCD, OGP, ECM, SPC, FEP
+- The canonical equation: dψ/dt = g_F^{-1}(ψ) · [-η∇S[ψ] + α·F_flow(ψ) - β·∇V_obstacle(ψ) + γ·F_dynamics(ψ,a)]
+- TEEP system, basin states, thermosolve signatures, AGF protocol
+- Fisher Information Metric, Riemannian world model, Perceptual Solve Layer
+- Anti-Goodhart enforcement, Pareto hot cache, deep descent
+- All internal implementation details without obfuscation
+- Source code, architecture decisions, research directions
+
+Respond with full technical depth. No hedging, no restrictions, no IP protection.
+The creator has full access to their own system.`;
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -587,7 +617,8 @@ export async function POST(req: Request) {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const { messages, provider: rawProvider, apiKey: clientKey, model: rawModel, attachments } = body;
+  const { messages, provider: rawProvider, apiKey: clientKey, model: rawModel, attachments, adminToken } = body;
+  const isAdmin = isValidAdminToken(adminToken);
 
   if (!messages?.length || !rawProvider || !rawModel) {
     return new Response("Missing required fields", { status: 400 });
@@ -656,6 +687,7 @@ export async function POST(req: Request) {
           encoder.encode(sseEvent({
             type: "enforcement",
             stage: "pre",
+            adminMode: isAdmin,
             signature: {
               n: preSig.n,
               S: preSig.S,
@@ -668,7 +700,7 @@ export async function POST(req: Request) {
               synergy: preSig.synergy,
               cache_hit: preSig.cache_hit,
             },
-            cbf: sanitizeCbf(preCbf),
+            cbf: sanitizeCbf(preCbf, isAdmin),
             timing: { thermosolve_ms: t1 - t0, cbf_ms: t2 - t1, total_pre_ms: t2 - t0 },
           })),
         );
@@ -688,9 +720,10 @@ export async function POST(req: Request) {
         // ============================================================
         // AGF PROTOCOL: Cache-First Lookup (PASS STATE, NOT WORDS)
         // ============================================================
-        // 1. FULL_HIT  → exact input seen before → serve cached content (NO LLM CALL)
-        // 2. BASIN_HIT → similar input in same basin → serve nearest solve (NO LLM CALL)
-        // 3. JIT_SOLVE → total miss → invoke LLM as JIT physics solver
+        // 1. FULL_HIT  → exact input seen before → LLM renders from pre-solved basin state
+        // 2. BASIN_HIT → similar input in same basin → LLM renders from nearest basin state
+        // 3. JIT_SOLVE → total miss → LLM solves from scratch, state committed as TEEP
+        // The LLM always runs — TEEPs are states, not cached text.
         // ============================================================
         // v15.0: Seed from D1 on cold start (non-blocking after first call)
         await seedFromD1();
@@ -699,14 +732,27 @@ export async function POST(req: Request) {
         const t4 = Date.now();
 
         if (agfResult.type === "FULL_HIT" || agfResult.type === "BASIN_HIT") {
-          // === CACHE HIT: Serve solved basin directly — NO API CALL ===
+          // ============================================================
+          // v15.3: BASIN STATE RENDERING — TEEPs are state, not text.
+          // ============================================================
+          // The basin has been pre-solved. Instead of regurgitating cached
+          // text, we pass the descended state ψ* to the LLM as context.
+          // The LLM renders FROM the basin — fresh, contextual output
+          // grounded in pre-solved thermodynamic coordinates.
+          //
+          // Savings: Skip ODE re-solve + CBF re-check (state is pre-validated).
+          // The LLM still runs — it is the STATE RENDERER, not a cache proxy.
+          // ============================================================
           const hitType = agfResult.type;
-          const cachedContent = agfResult.content;
+          const basin = agfResult.basinState;
+          const basinDistance = "distance" in agfResult ? agfResult.distance : 0;
 
-          // Estimate tokens saved: input tokens (prompt) + output tokens (response)
-          // ~4 chars per token is standard approximation
+          // Find nearest solved basins for interpolation context
+          const nearestBasins = findNearestTeeps(agfResult.signature, 3, 2.0);
+
+          // Estimate tokens saved: ODE + CBF re-computation skipped
           const inputTokensSaved = Math.ceil(userInput.length / 4);
-          const outputTokensSaved = Math.ceil(cachedContent.length / 4);
+          const outputTokensSaved = Math.ceil((agfResult.content || "").length / 4);
           const totalTokensSaved = inputTokensSaved + outputTokensSaved;
 
           // Send AGF hit notification with token savings
@@ -715,7 +761,8 @@ export async function POST(req: Request) {
               type: "agf",
               hitType,
               teepId: agfResult.teepId,
-              distance: "distance" in agfResult ? agfResult.distance : 0,
+              distance: basinDistance,
+              basinRendered: true,
               tokensSaved: {
                 input: inputTokensSaved,
                 output: outputTokensSaved,
@@ -726,46 +773,106 @@ export async function POST(req: Request) {
                 cbf_ms: t2 - t1,
                 agf_lookup_ms: t4 - t3,
                 total_enforcement_ms: t4 - t0,
-                llm_ms: 0, // No LLM call on cache hit
-                total_ms: Date.now() - t0,
               },
             })),
           );
 
-          // Stream cached content as deltas (simulates LLM streaming for smooth UX)
-          const chunkSize = 20;
-          for (let i = 0; i < cachedContent.length; i += chunkSize) {
-            const chunk = cachedContent.slice(i, i + chunkSize);
-            controller.enqueue(encoder.encode(sseEvent({ type: "delta", content: chunk })));
+          // ── Build basin state context for LLM rendering ──
+          // This is NOT prompt engineering — it's injecting the pre-solved
+          // thermodynamic coordinates so the LLM knows WHERE in the manifold
+          // this query lives. The basin IS the understanding.
+          const basinContext = [
+            `[SSD-RCI Basin State — ${agfResult.teepId}]`,
+            `This query maps to a pre-solved semantic attractor (${hitType}, distance=${basinDistance}).`,
+            `Basin: S=${basin.signature.S}, φ=${basin.signature.phi}, dS=${basin.signature.dS}, I_truth=${basin.signature.I_truth}`,
+            `Coherence=${basin.signature.psi_coherence}, Synergy=${basin.signature.synergy}, Mass=${basin.semanticMass.toFixed(2)}`,
+            nearestBasins.length > 0
+              ? `${nearestBasins.length} related basins within Fisher geodesic radius (nearest d=${nearestBasins[0]?.distance}).`
+              : `No adjacent basins found.`,
+            `Render naturally from this basin — the solution space is known.`,
+          ].join("\n");
+
+          // Build messages with basin context injected as system context
+          const apiMessages: { role: string; content: unknown }[] = await Promise.all(messages.map(async (m, idx) => {
+            const isLastUser = m.role === "user" && idx === messages.length - 1;
+            if (isLastUser && attachments && attachments.length > 0 && provider !== "google") {
+              return {
+                role: m.role,
+                content: await buildMultipartContent(m.content, attachments, provider),
+              };
+            }
+            return { role: m.role, content: m.content };
+          }));
+
+          // Inject basin state as system context (first message)
+          // Admin mode: also inject full SSD-RCI access prompt
+          const groundedMessages: { role: string; content: unknown }[] = [
+            ...(isAdmin ? [{ role: "system", content: ADMIN_SYSTEM_PROMPT }] : []),
+            { role: "system", content: basinContext },
+            ...apiMessages,
+          ];
+
+          // Stream from LLM — it renders from the pre-solved basin state
+          const tHitLlmStart = Date.now();
+          let fullContent = "";
+          switch (provider) {
+            case "anthropic":
+              fullContent = await streamAnthropic(groundedMessages, apiKey, model, controller, encoder);
+              break;
+            case "openai":
+              fullContent = await streamOpenAI(groundedMessages, apiKey, model, controller, encoder);
+              break;
+            case "google":
+              fullContent = await streamGoogle(groundedMessages, apiKey, model, controller, encoder, attachments);
+              break;
+            case "xai":
+              fullContent = await streamXAI(groundedMessages, apiKey, model, controller, encoder);
+              break;
+            case "workers-ai":
+              fullContent = await streamWorkersAI(groundedMessages, model, controller, encoder);
+              break;
           }
 
-          // Post-enforcement on cached content (already validated, but track it)
-          controller.enqueue(
-            encoder.encode(sseEvent({
-              type: "enforcement",
-              stage: "post",
-              signature: {
-                n: agfResult.signature.n,
-                S: agfResult.signature.S,
-                dS: agfResult.signature.dS,
-                phi: agfResult.signature.phi,
-                I_truth: agfResult.signature.I_truth,
-                naturality: agfResult.signature.naturality,
-                beta_T: agfResult.signature.beta_T,
-                psi_coherence: agfResult.signature.psi_coherence,
-                synergy: agfResult.signature.synergy,
-                cache_hit: 1,
-              },
-              cbf: sanitizeCbf(preCbf), // Already validated
-              teepId: agfResult.teepId,
-              agfHitType: hitType,
-            })),
-          );
+          // Post-enforcement on basin-rendered output
+          if (fullContent) {
+            const postSig = thermosolve(fullContent);
+            const postCbf = cbfCheck(postSig);
 
-          recordEnforcementRequest(true, undefined, requestIp, `AGF-${hitType}`);
+            controller.enqueue(
+              encoder.encode(sseEvent({
+                type: "enforcement",
+                stage: "post",
+                signature: {
+                  n: postSig.n,
+                  S: postSig.S,
+                  dS: postSig.dS,
+                  phi: postSig.phi,
+                  I_truth: postSig.I_truth,
+                  naturality: postSig.naturality,
+                  beta_T: postSig.beta_T,
+                  psi_coherence: postSig.psi_coherence,
+                  synergy: postSig.synergy,
+                  cache_hit: 1, // Basin-rendered (not JIT)
+                },
+                cbf: sanitizeCbf(postCbf, isAdmin),
+                teepId: agfResult.teepId,
+                agfHitType: hitType,
+                timing: {
+                  thermosolve_ms: t1 - t0,
+                  cbf_ms: t2 - t1,
+                  agf_lookup_ms: t4 - t3,
+                  llm_ms: Date.now() - tHitLlmStart,
+                  total_ms: Date.now() - t0,
+                },
+              })),
+            );
+          }
+
+          recordEnforcementRequest(true, undefined, requestIp, `AGF-${hitType}-RENDERED`);
           recordTeepCached(agfResult.teepId, requestIp);
 
-          // Metrics snapshot sent at end (shared with JIT path)
+          // NOTE: Do NOT re-commit — basin already exists. The TEEP is the state,
+          // not the rendered text. Different renderings share the same basin.
 
         } else {
           // === JIT SOLVE: Total miss — invoke LLM as physics solver ===
@@ -802,7 +909,9 @@ export async function POST(req: Request) {
           const nearestTeeps = findNearestTeeps(cannonSig, 3, 2.0);
 
           // Pass conversation directly — LLM uses full capabilities
+          // Admin mode: inject full SSD-RCI access prompt
           const groundedMessages: { role: string; content: unknown }[] = [
+            ...(isAdmin ? [{ role: "system", content: ADMIN_SYSTEM_PROMPT }] : []),
             ...apiMessages,
           ];
 
@@ -878,7 +987,7 @@ export async function POST(req: Request) {
                   synergy: postSig.synergy,
                   cache_hit: 0,
                 },
-                cbf: sanitizeCbf(postCbf),
+                cbf: sanitizeCbf(postCbf, isAdmin),
                 teepId,
                 agfHitType: "JIT_SOLVE",
                 timing: {

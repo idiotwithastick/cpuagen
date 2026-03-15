@@ -915,9 +915,24 @@ let bifurcationEvents = 0;
 // AGF PROTOCOL — Cache-First Lookup (v12.0 with Spatial Hash Grid)
 // ========================================================================
 
+// ════════════════════════════════════════════════════════════════════════════
+// v15.3: TEEPs are STATE CONTAINERS, not text caches.
+// On FULL_HIT/BASIN_HIT: return the basin STATE (signature + cbf), not text.
+// The LLM renders from state — it is never bypassed.
+// `content` is retained as metadata for debugging but is NOT the TEEP.
+// The TEEP IS the signature. The basin IS the understanding.
+// ════════════════════════════════════════════════════════════════════════════
+export interface BasinState {
+  signature: InternalSignature;
+  cbfResult: { allSafe: boolean };
+  semanticMass: number;
+  resonanceStrength: number;
+  boundary?: [number, number, number, number, number];
+}
+
 export type AgfResult =
-  | { type: "FULL_HIT"; content: string; teepId: string; signature: InternalSignature }
-  | { type: "BASIN_HIT"; content: string; teepId: string; signature: InternalSignature; distance: number }
+  | { type: "FULL_HIT"; basinState: BasinState; teepId: string; signature: InternalSignature; content?: string }
+  | { type: "BASIN_HIT"; basinState: BasinState; teepId: string; signature: InternalSignature; distance: number; content?: string }
   | { type: "JIT_SOLVE" };
 
 export async function agfLookup(inputContent: string, precomputedSig?: InternalSignature): Promise<AgfResult> {
@@ -945,9 +960,16 @@ export async function agfLookup(inputContent: string, precomputedSig?: InternalS
       }
       return {
         type: "FULL_HIT",
-        content: cached.content,
+        basinState: {
+          signature: cached.signature,
+          cbfResult: cached.cbfResult,
+          semanticMass: cached.semanticMass,
+          resonanceStrength: cached.resonanceStrength,
+          boundary: cached.boundary,
+        },
         teepId: cached.id,
         signature: { ...cached.signature, cache_hit: 1 },
+        content: cached.content,
       };
     }
   }
@@ -1018,10 +1040,17 @@ export async function agfLookup(inputContent: string, precomputedSig?: InternalS
     reinforceMorphicField(bestMatch.signature);
     return {
       type: "BASIN_HIT",
-      content: bestMatch.content,
+      basinState: {
+        signature: bestMatch.signature,
+        cbfResult: bestMatch.cbfResult,
+        semanticMass: bestMatch.semanticMass,
+        resonanceStrength: bestMatch.resonanceStrength,
+        boundary: bestMatch.boundary,
+      },
       teepId: bestMatch.id,
       signature: { ...bestMatch.signature, cache_hit: 1 },
       distance: round4(bestDistance),
+      content: bestMatch.content,
     };
   }
   holoLookupMisses++;
@@ -1073,7 +1102,13 @@ export async function agfLookup(inputContent: string, precomputedSig?: InternalS
       reinforceMorphicField(bestMatch.signature);
       return {
         type: "BASIN_HIT",
-        content: bestMatch.content,
+        basinState: {
+          signature: bestMatch.signature,
+          cbfResult: bestMatch.cbfResult,
+          semanticMass: bestMatch.semanticMass,
+          resonanceStrength: bestMatch.resonanceStrength,
+          boundary: bestMatch.boundary,
+        },
         teepId: bestMatch.id,
         signature: { ...bestMatch.signature, cache_hit: 1 },
         distance: round4(bestDistance),
@@ -1121,7 +1156,13 @@ export async function agfLookup(inputContent: string, precomputedSig?: InternalS
           .catch((err) => console.error("[TEEP-D1] D1_FALLBACK stats update failed:", err));
         return {
           type: "BASIN_HIT",
-          content: d1Hit.content,
+          basinState: {
+            signature: restoredTeep.signature,
+            cbfResult: restoredTeep.cbfResult,
+            semanticMass: restoredTeep.semanticMass,
+            resonanceStrength: restoredTeep.resonanceStrength,
+            boundary: restoredTeep.boundary,
+          },
           teepId: d1Hit.id,
           signature: { ...(d1Hit.signature as unknown as InternalSignature), cache_hit: 1 },
           distance: 0,
@@ -2346,10 +2387,14 @@ export function getRecentTeeps(limit = 20): Array<{
   hash: string;
   created: number;
   hits: number;
-  contentPreview: string;
   semanticMass: number;
   resonanceStrength: number;
-  sig: { n: number; S: number; phi: number; I_truth: number };
+  sig: {
+    n: number; S: number; dS: number; phi: number;
+    I_truth: number; naturality: number; beta_T: number;
+    psi_coherence: number; synergy: number; Q_quality: number;
+    trigram_hash: number;
+  };
 }> {
   const entries = Array.from(teepLedger.values())
     .sort((a, b) => b.created - a.created)
@@ -2360,14 +2405,20 @@ export function getRecentTeeps(limit = 20): Array<{
     hash: e.content_hash,
     created: e.created,
     hits: e.hits,
-    contentPreview: e.content.slice(0, 80) + (e.content.length > 80 ? "..." : ""),
     semanticMass: round4(e.semanticMass),
     resonanceStrength: round4(e.resonanceStrength),
     sig: {
       n: e.signature.n,
-      S: e.signature.S,
-      phi: e.signature.phi,
-      I_truth: e.signature.I_truth,
+      S: round4(e.signature.S),
+      dS: round4(e.signature.dS),
+      phi: round4(e.signature.phi),
+      I_truth: round4(e.signature.I_truth),
+      naturality: round4(e.signature.naturality),
+      beta_T: round4(e.signature.beta_T),
+      psi_coherence: round4(e.signature.psi_coherence),
+      synergy: round4(e.signature.synergy),
+      Q_quality: round4(e.signature.Q_quality),
+      trigram_hash: e.signature.trigram_hash,
     },
   }));
 }

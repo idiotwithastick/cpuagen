@@ -11,6 +11,7 @@ import {
   getPreferences,
   savePreferences,
 } from "@/lib/memory-db";
+import { thermosolve, cbfCheck } from "@/lib/enforcement";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,15 @@ export async function GET(req: NextRequest) {
   const userId = searchParams.get("user_id") || "default";
 
   try {
+    const sig = thermosolve(`memory-get:${resource}:${userId}`);
+    const cbf = cbfCheck(sig);
+    if (!cbf.safe) {
+      return Response.json(
+        { ok: false, error: "Request blocked by enforcement", barriers: cbf.failures },
+        { status: 403 },
+      );
+    }
+
     if (resource === "conversations") {
       const id = searchParams.get("id");
       if (id) {
@@ -65,6 +75,15 @@ export async function POST(req: NextRequest) {
   const { action, user_id: userId = "default" } = body;
 
   try {
+    const sig = thermosolve(`memory-post:${action}:${userId}`);
+    const cbf = cbfCheck(sig);
+    if (!cbf.safe) {
+      return Response.json(
+        { ok: false, error: "Request blocked by enforcement", barriers: cbf.failures },
+        { status: 403 },
+      );
+    }
+
     if (action === "save_conversation") {
       const { id, title, messages } = body;
       if (!id || !messages) {

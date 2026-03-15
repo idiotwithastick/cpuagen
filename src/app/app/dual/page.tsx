@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { EnforcementResult, Settings, ApiKeys, Provider } from "@/lib/types";
 import { PROVIDERS, migrateSettings, DEFAULT_SETTINGS } from "@/lib/types";
+import { withAdminToken } from "@/lib/admin";
 import { getDualContext } from "@/lib/system-context";
 
 /* ─── Types ─── */
@@ -293,7 +294,7 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(withAdminToken({
           messages: [
             { role: "system", content: systemPrompt },
             ...contextMsgs,
@@ -301,7 +302,7 @@ ${settings.systemPrompt ? `\nAdditional instructions: ${settings.systemPrompt}` 
           provider,
           model,
           apiKey,
-        }),
+        })),
         signal: controller.signal,
       });
 

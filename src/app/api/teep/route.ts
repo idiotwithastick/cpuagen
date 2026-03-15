@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    if (!body.snapshot || body.snapshot.version !== "12.0") {
+    if (!body.snapshot || !["12.0", "13.0", "14.0"].includes(body.snapshot.version)) {
       return Response.json({ ok: false, error: "Invalid snapshot format" }, { status: 400 });
     }
 

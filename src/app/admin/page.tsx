@@ -42,7 +42,8 @@ export default function AdminLogin() {
 
       // Store admin token
       sessionStorage.setItem("cpuagen-admin-token", data.token);
-      router.push("/admin/dashboard");
+      // Full page navigation avoids RSC 503 issue with Next.js 16 middleware
+      window.location.href = "/admin/dashboard";
     } catch {
       setError("Connection failed");
     } finally {

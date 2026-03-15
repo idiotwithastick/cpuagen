@@ -2,18 +2,34 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Detect admin session from sessionStorage token
+  useEffect(() => {
+    try {
+      const token = sessionStorage.getItem("cpuagen-admin-token");
+      if (token) {
+        const decoded = atob(token);
+        const adminUser = "wforeman";
+        setIsAdmin(decoded.startsWith(adminUser + ":"));
+      }
+    } catch { /* not admin */ }
+  }, []);
 
   const nav = [
     { href: "/app/chat", label: "Chat", icon: "\u{1F4AC}", active: pathname?.startsWith("/app/chat") },
+    { href: "/app/workspace", label: "Workspace", icon: "\u{1F4C1}", active: pathname?.startsWith("/app/workspace") },
     { href: "/app/code", label: "Code", icon: "\u{1F4BB}", active: pathname?.startsWith("/app/code") },
     { href: "/app/dual", label: "Dual", icon: "\u{1F91D}", active: pathname?.startsWith("/app/dual") },
     { href: "/app/cowork", label: "Cowork", icon: "\u{1F9D1}\u200D\u{1F4BB}", active: pathname?.startsWith("/app/cowork") },
     { href: "/app/automate", label: "Automate", icon: "\u{1F916}", active: pathname?.startsWith("/app/automate") },
+    { href: "/app/agent", label: "Agent Loop", icon: "\u{1F504}", active: pathname?.startsWith("/app/agent") },
+    { href: "/app/dashboard", label: "Dashboard", icon: "\u{1F4CA}", active: pathname?.startsWith("/app/dashboard") },
     { href: "/app/memory", label: "Memory", icon: "\u{1F9E0}", active: pathname?.startsWith("/app/memory") },
     { href: "/app/extensions", label: "Extensions", icon: "\u{1F9E9}", active: pathname?.startsWith("/app/extensions") },
     { href: "/app/dev", label: "Dev Lab", icon: "\u{1F9EA}", active: pathname?.startsWith("/app/dev") },
@@ -40,8 +56,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="text-accent-light text-xs font-bold">C</span>
           </div>
           <span className="font-semibold tracking-tight text-sm">CPUAGEN</span>
-          <span className="text-[10px] text-accent-light font-mono ml-auto px-1.5 py-0.5 rounded bg-accent/10 border border-accent/20">
-            ALPHA
+          <span className={`text-[10px] font-mono ml-auto px-1.5 py-0.5 rounded border ${
+            isAdmin
+              ? "text-warning bg-warning/10 border-warning/30"
+              : "text-accent-light bg-accent/10 border-accent/20"
+          }`}>
+            {isAdmin ? "ADMIN" : "ALPHA"}
           </span>
         </div>
 
@@ -66,6 +86,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="p-3 border-t border-border shrink-0">
+          {isAdmin && (
+            <div className="px-3 py-2 mb-2 rounded-lg bg-warning/5 border border-warning/20">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="w-1.5 h-1.5 bg-warning rounded-full animate-pulse" />
+                <span className="text-[10px] font-mono text-warning">ADMIN MODE</span>
+              </div>
+              <div className="text-[10px] text-muted font-mono">
+                Full SSD-RCI access | No obfuscation
+              </div>
+            </div>
+          )}
           <div className="px-3 py-2 mb-2 rounded-lg bg-surface-light/50">
             <div className="flex items-center gap-1.5 mb-1">
               <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
@@ -75,12 +106,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               7.3M+ cached | all barriers active
             </div>
           </div>
-          <Link
-            href="/"
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-muted hover:text-foreground hover:bg-surface-light transition-colors"
-          >
-            \u2190 Back to home
-          </Link>
+          <div className="flex gap-1">
+            <Link
+              href="/"
+              className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-muted hover:text-foreground hover:bg-surface-light transition-colors"
+            >
+              \u2190 Home
+            </Link>
+            {!isAdmin && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs text-muted hover:text-warning hover:bg-warning/5 transition-colors"
+              >
+                Admin
+              </Link>
+            )}
+          </div>
         </div>
       </aside>
 

@@ -119,6 +119,7 @@ export interface EnforcementResult {
   post?: EnforcementStage;
   agfHitType?: string;
   timing?: PerformanceTiming;
+  basinRendered?: boolean;  // v15.3: LLM rendered from pre-solved basin state
   tokensSaved?: {
     input: number;
     output: number;
