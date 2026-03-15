@@ -723,6 +723,8 @@ export default function ChatPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [hydrated, setHydrated] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [editingConvId, setEditingConvId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasCode, setCanvasCode] = useState("");
   const [canvasLang, setCanvasLang] = useState("");
@@ -988,6 +990,16 @@ export default function ChatPage() {
     setActiveConvId(conv.id);
     setMessages(conv.messages);
     setShowHistory(false);
+  };
+
+  const renameConversation = (convId: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    setConversations((prev) => {
+      const next = prev.map((c) => c.id === convId ? { ...c, title: newTitle.trim() } : c);
+      saveConversations(next);
+      return next;
+    });
+    setEditingConvId(null);
   };
 
   const deleteConversation = (convId: string, e: React.MouseEvent) => {
@@ -1460,7 +1472,28 @@ export default function ChatPage() {
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="truncate text-xs font-medium">{conv.title}</div>
+                    {editingConvId === conv.id ? (
+                      <input
+                        autoFocus
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") renameConversation(conv.id, editingTitle);
+                          if (e.key === "Escape") setEditingConvId(null);
+                        }}
+                        onBlur={() => renameConversation(conv.id, editingTitle)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full text-xs font-medium bg-background border border-accent/30 rounded px-1 py-0.5 text-foreground outline-none"
+                      />
+                    ) : (
+                      <div
+                        className="truncate text-xs font-medium"
+                        onDoubleClick={(e) => { e.stopPropagation(); setEditingConvId(conv.id); setEditingTitle(conv.title); }}
+                        title="Double-click to rename"
+                      >
+                        {conv.title}
+                      </div>
+                    )}
                     <div className="text-[10px] text-muted/70 mt-0.5">
                       {conv.messages.length} msgs {"\u00B7"} {new Date(conv.updatedAt).toLocaleDateString()}
                     </div>
