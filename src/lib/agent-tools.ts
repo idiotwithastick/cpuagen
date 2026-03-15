@@ -174,17 +174,59 @@ export async function executeTool(call: ToolCall): Promise<ToolResult> {
 async function executeWebSearch(args: { query: string; num_results?: number }): Promise<string> {
   const { query, num_results = 5 } = args;
 
-  // Try DuckDuckGo HTML search first for richer results
+  // Strategy 1: DuckDuckGo Instant Answer API (most reliable from serverless)
+  try {
+    const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+    const res = await fetch(ddgUrl, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const data = await res.json() as {
+        AbstractText?: string;
+        AbstractSource?: string;
+        AbstractURL?: string;
+        RelatedTopics?: Array<{ Text?: string; FirstURL?: string }>;
+        Results?: Array<{ Text?: string; FirstURL?: string }>;
+      };
+
+      const results: string[] = [];
+
+      if (data.AbstractText) {
+        results.push(`**${data.AbstractSource || "Result"}**: ${data.AbstractText}\nURL: ${data.AbstractURL || "N/A"}`);
+      }
+
+      if (data.Results) {
+        for (const r of data.Results.slice(0, num_results)) {
+          if (r.Text) results.push(`• ${r.Text}\n  ${r.FirstURL || ""}`);
+        }
+      }
+
+      if (data.RelatedTopics) {
+        for (const r of data.RelatedTopics.slice(0, num_results - results.length)) {
+          if (r.Text) results.push(`• ${r.Text}\n  ${r.FirstURL || ""}`);
+        }
+      }
+
+      if (results.length > 0) {
+        return `Search results for "${query}":\n\n${results.join("\n\n")}`;
+      }
+    }
+  } catch {
+    // Fall through to HTML scraping
+  }
+
+  // Strategy 2: DuckDuckGo HTML search (can get blocked by captcha on serverless)
   try {
     const htmlUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const htmlRes = await fetch(htmlUrl, {
-      headers: { "User-Agent": "CPUAGEN-Agent/1.0" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
       signal: AbortSignal.timeout(8000),
     });
 
     if (htmlRes.ok) {
       const html = await htmlRes.text();
-      // Parse search results from HTML
       const resultPattern = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
       const results: string[] = [];
       let match;
@@ -203,45 +245,22 @@ async function executeWebSearch(args: { query: string; num_results?: number }): 
       }
     }
   } catch {
-    // Fall through to Instant Answer API
+    // Fall through to Wikipedia
   }
 
-  // Fallback: DuckDuckGo Instant Answer API
-  const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-  const res = await fetch(ddgUrl, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`Search failed: ${res.status}`);
-
-  const data = await res.json() as {
-    AbstractText?: string;
-    AbstractSource?: string;
-    AbstractURL?: string;
-    RelatedTopics?: Array<{ Text?: string; FirstURL?: string }>;
-    Results?: Array<{ Text?: string; FirstURL?: string }>;
-  };
-
-  const results: string[] = [];
-
-  if (data.AbstractText) {
-    results.push(`**${data.AbstractSource || "Result"}**: ${data.AbstractText}\nURL: ${data.AbstractURL || "N/A"}`);
-  }
-
-  if (data.Results) {
-    for (const r of data.Results.slice(0, num_results)) {
-      if (r.Text) results.push(`• ${r.Text}\n  ${r.FirstURL || ""}`);
+  // Strategy 3: Wikipedia API as last resort for factual queries
+  try {
+    const wikiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
+    const wikiRes = await fetch(wikiUrl, { signal: AbortSignal.timeout(5000) });
+    if (wikiRes.ok) {
+      const wikiData = await wikiRes.json() as { title?: string; extract?: string; content_urls?: { desktop?: { page?: string } } };
+      if (wikiData.extract) {
+        return `Search results for "${query}":\n\n**${wikiData.title || query}** (Wikipedia)\n${wikiData.extract}\nURL: ${wikiData.content_urls?.desktop?.page || "N/A"}`;
+      }
     }
-  }
+  } catch { /* ignore */ }
 
-  if (data.RelatedTopics) {
-    for (const r of data.RelatedTopics.slice(0, num_results - results.length)) {
-      if (r.Text) results.push(`• ${r.Text}\n  ${r.FirstURL || ""}`);
-    }
-  }
-
-  if (results.length === 0) {
-    return `No results found for "${query}". Try a more specific query.`;
-  }
-
-  return `Search results for "${query}":\n\n${results.join("\n\n")}`;
+  return `No results found for "${query}". The search service may be temporarily unavailable. Try rephrasing your query or using the fetch_url tool to access a specific resource directly.`;
 }
 
 function executeCalculator(args: { expression: string }): string {

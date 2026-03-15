@@ -5,11 +5,26 @@
 // POST /api/teep → Import engine snapshot (restore from client localStorage)
 // ========================================================================
 
-import { exportEngineState, importEngineState } from "@/lib/enforcement";
+import { exportEngineState, importEngineState, seedFromD1 } from "@/lib/enforcement";
 
 export const runtime = "nodejs";
 
+let d1SeedAttempted = false;
+
 export async function GET() {
+  // Auto-seed from D1 on first request (loads persisted TEEPs into RAM)
+  if (!d1SeedAttempted) {
+    d1SeedAttempted = true;
+    try {
+      const seeded = await seedFromD1();
+      if (seeded.teeps > 0 || seeded.basins > 0) {
+        console.log(`[TEEP] Auto-seeded from D1: ${seeded.teeps} TEEPs, ${seeded.basins} basins`);
+      }
+    } catch {
+      // D1 not configured or unavailable — continue with in-memory state
+    }
+  }
+
   const snapshot = exportEngineState();
 
   return Response.json({

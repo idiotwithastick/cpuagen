@@ -40,7 +40,21 @@ export async function POST(req: Request) {
   const agentProvider = providerMap[resolvedProvider];
   if (!agentProvider) {
     return Response.json(
-      { ok: false, error: `Agent loop requires openai, anthropic, google, or xai provider (got "${resolvedProvider}")` },
+      { ok: false, error: `Agent loop requires openai, anthropic, google, or xai provider. Go to Settings to select a provider and enter your API key.` },
+      { status: 400 },
+    );
+  }
+
+  if (!resolvedKey) {
+    return Response.json(
+      { ok: false, error: `No API key provided for ${resolvedProvider}. Go to Settings and enter your ${resolvedProvider} API key.` },
+      { status: 400 },
+    );
+  }
+
+  if (!resolvedModel) {
+    return Response.json(
+      { ok: false, error: `No model selected for ${resolvedProvider}. Go to Settings and choose a model.` },
       { status: 400 },
     );
   }
