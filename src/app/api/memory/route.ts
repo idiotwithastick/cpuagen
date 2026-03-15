@@ -15,16 +15,8 @@ import { thermosolve, cbfCheck } from "@/lib/enforcement";
 
 export const runtime = "nodejs";
 
-let tablesReady = false;
-
-async function init() {
-  if (!tablesReady) {
-    tablesReady = await ensureMemoryTables();
-  }
-}
-
 export async function GET(req: NextRequest) {
-  await init();
+  await ensureMemoryTables();
   const { searchParams } = req.nextUrl;
   const resource = searchParams.get("resource") || "conversations";
   const userId = searchParams.get("user_id") || "default";
@@ -70,7 +62,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  await init();
+  await ensureMemoryTables();
   const body = await req.json();
   const { action, user_id: userId = "default" } = body;
 

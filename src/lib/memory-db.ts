@@ -44,7 +44,18 @@ async function d1Exec(sql: string, params: (string | number | null)[] = []) {
 
 // ─── Table Setup ───
 
+let _tablesReady = false;
+let _tablesPromise: Promise<boolean> | null = null;
+
 export async function ensureMemoryTables(): Promise<boolean> {
+  if (_tablesReady) return true;
+  if (_tablesPromise) return _tablesPromise;
+
+  _tablesPromise = _ensureMemoryTablesInner();
+  return _tablesPromise;
+}
+
+async function _ensureMemoryTablesInner(): Promise<boolean> {
   const sqls = [
     `CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
@@ -71,8 +82,12 @@ export async function ensureMemoryTables(): Promise<boolean> {
   ];
   for (const sql of sqls) {
     const ok = await d1Exec(sql);
-    if (!ok) return false;
+    if (!ok) {
+      _tablesPromise = null;
+      return false;
+    }
   }
+  _tablesReady = true;
   return true;
 }
 

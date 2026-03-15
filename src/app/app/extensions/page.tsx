@@ -133,6 +133,14 @@ export default function ExtensionsPage() {
         </div>
       )}
 
+      {/* Under Development Banner */}
+      <div className="bg-warning/10 border-b border-warning/30 px-6 py-3 flex items-center gap-3">
+        <span className="w-2 h-2 bg-warning rounded-full animate-pulse shrink-0" />
+        <p className="text-xs text-warning font-medium">
+          Extensions are under active development. Installed extensions modify AI behavior in chat — full standalone functionality is being rolled out progressively.
+        </p>
+      </div>
+
       <div className="p-6 border-b border-border">
         <div className="flex items-center justify-between">
           <div>

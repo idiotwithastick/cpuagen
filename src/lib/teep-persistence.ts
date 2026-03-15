@@ -73,6 +73,7 @@ export interface PersistedTeep {
 /* ─── WRITE: Persist a TEEP after commitTeep ─── */
 
 export async function persistTeep(teep: PersistedTeep): Promise<void> {
+  await ensureTeepTables();
   const sql = `
     INSERT OR REPLACE INTO teeps (
       id, content_hash, input_hash, content, signature_json,
@@ -106,6 +107,7 @@ export async function persistTeep(teep: PersistedTeep): Promise<void> {
 /* ─── WRITE: Persist basin index entry ─── */
 
 export async function persistBasinIndex(inputHash: string, contentHash: string, teepId: string): Promise<void> {
+  await ensureTeepTables();
   const sql = `INSERT OR REPLACE INTO basin_index (input_hash, content_hash, teep_id, created_at) VALUES (?, ?, ?, ?)`;
   await d1Query(sql, [inputHash, contentHash, teepId, String(Date.now())]);
 }
@@ -113,6 +115,7 @@ export async function persistBasinIndex(inputHash: string, contentHash: string, 
 /* ─── WRITE: Update hit count ─── */
 
 export async function persistHitUpdate(contentHash: string, hits: number, resonanceStrength: number, semanticMass: number): Promise<void> {
+  await ensureTeepTables();
   const sql = `UPDATE teeps SET hits = ?, resonance_strength = ?, semantic_mass = ?, last_resonance = ?, updated_at = ? WHERE content_hash = ?`;
   const now = String(Date.now());
   await d1Query(sql, [String(hits), String(resonanceStrength), String(semanticMass), now, now, contentHash]);
@@ -121,6 +124,7 @@ export async function persistHitUpdate(contentHash: string, hits: number, resona
 /* ─── WRITE: Increment global stats ─── */
 
 export async function persistStatsIncrement(type: "commit" | "hit" | "query" | "api_avoided"): Promise<void> {
+  await ensureTeepTables();
   const colMap = {
     commit: "total_commits",
     hit: "total_hits",
@@ -137,6 +141,7 @@ export async function persistStatsIncrement(type: "commit" | "hit" | "query" | "
 /* ─── READ: Load hot TEEPs for cold start cache seeding ─── */
 
 export async function loadHotTeeps(limit: number = 500): Promise<PersistedTeep[]> {
+  await ensureTeepTables();
   const sql = `
     SELECT id, content_hash, input_hash, content, signature_json,
            cbf_all_safe, hits, semantic_mass, resonance_strength,
@@ -172,6 +177,7 @@ export async function loadHotTeeps(limit: number = 500): Promise<PersistedTeep[]
 /* ─── READ: Load basin index for exact-match lookups ─── */
 
 export async function loadBasinIndex(limit: number = 2000): Promise<{ inputHash: string; contentHash: string; teepId: string }[]> {
+  await ensureTeepTables();
   const sql = `SELECT input_hash, content_hash, teep_id FROM basin_index ORDER BY created_at DESC LIMIT ?`;
   const results = await d1Query(sql, [String(limit)]);
   if (!results.length || !results[0].results) return [];
@@ -244,6 +250,71 @@ export async function getTeepCount(): Promise<number> {
   const results = await d1Query("SELECT COUNT(*) as cnt FROM teeps WHERE cbf_all_safe = 1");
   if (!results.length || !results[0].results?.length) return 0;
   return (results[0].results[0].cnt as number) || 0;
+}
+
+/* ─── TABLE INITIALIZATION (idempotent, runs once per cold start) ─── */
+
+let tablesEnsured = false;
+let tablesEnsurePromise: Promise<boolean> | null = null;
+
+export async function ensureTeepTables(): Promise<boolean> {
+  if (tablesEnsured) return true;
+  if (!CF_API_TOKEN) return false;
+  if (tablesEnsurePromise) return tablesEnsurePromise;
+
+  tablesEnsurePromise = (async () => {
+    try {
+      const sqls = [
+        `CREATE TABLE IF NOT EXISTS teeps (
+          id TEXT PRIMARY KEY,
+          content_hash TEXT NOT NULL,
+          input_hash TEXT DEFAULT '',
+          content TEXT NOT NULL,
+          signature_json TEXT NOT NULL,
+          cbf_all_safe INTEGER NOT NULL DEFAULT 1,
+          hits INTEGER NOT NULL DEFAULT 0,
+          semantic_mass REAL NOT NULL DEFAULT 1.0,
+          resonance_strength REAL NOT NULL DEFAULT 0.0,
+          boundary_json TEXT DEFAULT '',
+          parent_id TEXT DEFAULT '',
+          role TEXT DEFAULT '',
+          turn INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          last_resonance INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_teeps_content_hash ON teeps(content_hash)`,
+        `CREATE INDEX IF NOT EXISTS idx_teeps_hits ON teeps(hits DESC, last_resonance DESC)`,
+        `CREATE TABLE IF NOT EXISTS basin_index (
+          input_hash TEXT PRIMARY KEY,
+          content_hash TEXT NOT NULL,
+          teep_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_basin_content ON basin_index(content_hash)`,
+        `CREATE TABLE IF NOT EXISTS teep_stats (
+          id INTEGER PRIMARY KEY DEFAULT 1,
+          total_commits INTEGER NOT NULL DEFAULT 0,
+          total_hits INTEGER NOT NULL DEFAULT 0,
+          total_queries INTEGER NOT NULL DEFAULT 0,
+          api_calls_avoided INTEGER NOT NULL DEFAULT 0,
+          last_updated INTEGER NOT NULL DEFAULT 0
+        )`,
+      ];
+      for (const sql of sqls) {
+        await d1Query(sql);
+      }
+      tablesEnsured = true;
+      console.log("[TEEP-D1] Tables ensured (CREATE IF NOT EXISTS)");
+      return true;
+    } catch (err) {
+      console.error("[TEEP-D1] Table creation failed:", err);
+      tablesEnsurePromise = null;
+      return false;
+    }
+  })();
+
+  return tablesEnsurePromise;
 }
 
 /* ─── DIAGNOSTIC: Check if D1 is configured and reachable ─── */
