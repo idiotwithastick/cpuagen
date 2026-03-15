@@ -150,6 +150,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 Admin
               </Link>
             )}
+            <button
+              onClick={async () => {
+                try {
+                  await fetch("/api/auth/logout", { method: "POST" });
+                  sessionStorage.removeItem("cpuagen-admin-token");
+                  window.location.href = "/";
+                } catch {
+                  window.location.href = "/";
+                }
+              }}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs text-muted hover:text-danger hover:bg-danger/5 transition-colors cursor-pointer"
+              title="Sign out and clear access"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </aside>

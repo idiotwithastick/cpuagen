@@ -735,6 +735,7 @@ export default function ChatPage() {
   const [markupAnnotations, setMarkupAnnotations] = useState<PageAnnotations>({});
   const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([]);
   const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [macrosOpen, setMacrosOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -1328,6 +1329,29 @@ export default function ChatPage() {
     el.style.height = Math.min(el.scrollHeight, 200) + "px";
   };
 
+  // SSD-RCI Macro Emoji Programs
+  const MACROS = [
+    { emoji: "\uD83E\uDDF2", name: "Prompt", desc: "Gateway prompt processing", prefix: "\uD83E\uDDF2 " },
+    { emoji: "\uD83D\uDC1B", name: "Bug Inspect", desc: "Parallel security/logic/resource analysis", prefix: "\uD83D\uDC1B " },
+    { emoji: "\uD83E\uDD14", name: "Research", desc: "5\u00D75 Bloom parallel research program", prefix: "\uD83E\uDD14 " },
+    { emoji: "\uD83E\uDD7D", name: "Deep Dive", desc: "Deep dive artifact analysis", prefix: "\uD83E\uDD7D " },
+    { emoji: "\uD83D\uDD2C", name: "Experiment", desc: "Hypothesis testing pipeline", prefix: "\uD83D\uDD2C " },
+    { emoji: "\uD83D\uDD17", name: "Trace", desc: "Provenance & dependency tracing", prefix: "\uD83D\uDD17 " },
+    { emoji: "\u26CF\uFE0F", name: "Miner", desc: "Research implementation mining", prefix: "\u26CF\uFE0F " },
+    { emoji: "\uD83E\uDD2F", name: "TEEP Rider", desc: "Document TEEP compression", prefix: "\uD83E\uDD2F " },
+    { emoji: "\uD83E\uDD73", name: "Party", desc: "Novel research TEEP discovery", prefix: "\uD83E\uDD73 " },
+    { emoji: "\uD83E\uDD13", name: "NERD", desc: "Novel Exploratory Research & Development", prefix: "\uD83E\uDD13 " },
+    { emoji: "\uD83E\uDD16", name: "Autonomous", desc: "16-hour autonomous AGI cycle", prefix: "\uD83E\uDD16 " },
+    { emoji: "\uD83D\uDE80", name: "Rocket", desc: "Generative Space Expansion", prefix: "\uD83D\uDE80 " },
+    { emoji: "\uD83D\uDC8E", name: "Diamond", desc: "TEEP Reverse Solve Pipeline", prefix: "\uD83D\uDC8E " },
+    { emoji: "\uD83D\uDC68\u200D\uD83D\uDCBC", name: "Archive", desc: "Tri-drive sync & integrity verification", prefix: "\uD83D\uDC68\u200D\uD83D\uDCBC " },
+  ];
+
+  const insertMacro = (prefix: string) => {
+    setInput((prev) => prefix + prev);
+    textareaRef.current?.focus();
+  };
+
   if (!hydrated) return null;
 
   if (!isConfigured) {
@@ -1355,7 +1379,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className={`flex-1 flex min-h-0 ${canvasOpen ? "" : "flex-col"}`}>
+    <div className="flex-1 flex min-h-0 overflow-hidden">
     {/* Chat pane */}
     <div className={`flex flex-col min-h-0 relative ${canvasOpen ? "w-1/3 border-r border-border max-md:hidden" : "flex-1"}`}>
       {/* Chat header */}
@@ -1394,6 +1418,17 @@ export default function ChatPage() {
           </select>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMacrosOpen(!macrosOpen)}
+            className={`px-2.5 py-1 rounded-md text-[10px] font-mono border transition-colors cursor-pointer ${
+              macrosOpen
+                ? "text-warning border-warning/30 bg-warning/10"
+                : "text-muted border-border hover:border-accent/30 hover:text-accent-light"
+            }`}
+            title="SSD-RCI Macro Programs"
+          >
+            {"\uD83E\uDDF2"} Macros
+          </button>
           <button
             onClick={startNewChat}
             disabled={loading}
@@ -1774,6 +1809,42 @@ export default function ChatPage() {
               onAnnotationsChange={setMarkupAnnotations}
             />
           )}
+        </div>
+      </div>
+    )}
+
+    {/* Macro Programs Panel (collapsible right side) */}
+    {macrosOpen && !canvasOpen && (
+      <div className="w-56 border-l border-border bg-surface/50 flex flex-col shrink-0 max-md:hidden">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+          <span className="text-[10px] font-mono text-muted uppercase tracking-wider">SSD-RCI Macros</span>
+          <button
+            onClick={() => setMacrosOpen(false)}
+            className="text-muted hover:text-foreground text-xs cursor-pointer"
+          >
+            {"\u2715"}
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto py-1">
+          {MACROS.map((m) => (
+            <button
+              key={m.name}
+              onClick={() => insertMacro(m.prefix)}
+              className="w-full flex items-start gap-2.5 px-3 py-2 hover:bg-surface-light transition-colors text-left cursor-pointer group"
+              title={`Insert ${m.emoji} ${m.name} macro`}
+            >
+              <span className="text-base leading-none mt-0.5 group-hover:scale-110 transition-transform">{m.emoji}</span>
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-foreground truncate">{m.name}</div>
+                <div className="text-[10px] text-muted leading-tight">{m.desc}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+        <div className="px-3 py-2 border-t border-border">
+          <p className="text-[9px] text-muted/60 leading-tight">
+            Click a macro to prepend it to your message. Macros trigger specialized SSD-RCI cognitive pipelines.
+          </p>
         </div>
       </div>
     )}
